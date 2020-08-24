@@ -17,7 +17,8 @@ from struct import *
 # from test import package_size
 import numpy as np
 import matplotlib.pyplot as plt
-from plot import DataMonitor
+from plot import DataMonitor, HistMonitor
+import time
 # Marker class for storing marker information
 class Marker:
     def __init__(self):
@@ -128,12 +129,25 @@ data1s = []
 lastBlock = -1
 
 # Initialize own modules
-sr = 1000
-package_size = 1000
-data_monitor = DataMonitor(sr, package_size)
+sr = 250
+dur_package = 0.02  # This is fixed
+package_size = int(round(sr*dur_package))
+plot_package_interval = 10 * package_size
+
+data_monitor = DataMonitor(sr, plot_package_interval)
+hist_monitor = HistMonitor(sr)
+# Time lag monitoring
+cnt = 0
+lag_s = 99999
+startTime = time.time()
+theoreticalLooptime = float(package_size)/sr
+
+# Response
+targetMarker = 'R 14'
+
 #### Main Loop ####
 while not finish:
-
+    
     # Get message header as raw array of chars
     rawhdr = RecvData(con, 24)
 
@@ -156,11 +170,13 @@ while not finish:
         print "Resolutions: " + str(resolutions)
         print "Channel Names: " + str(channelNames)
 
+        ch_name = 'RP'
+        ch_idx = channelNames.index(ch_name)
 
     elif msgtype == 4:
         # Data message, extract data and markers
         (block, points, markerCount, data, markers) = GetData(rawdata, channelCount)
-
+        hist_monitor.update_data(data)
         # Check for overflow
         if lastBlock != -1 and block > lastBlock + 1:
             print "*** Overflow with " + str(block - lastBlock) + " datablocks ***" 
@@ -170,32 +186,30 @@ while not finish:
         if markerCount > 0:
             for m in range(markerCount):
                 print "Marker " + markers[m].description + " of type " + markers[m].type
+            markerDescriptions = [marker.description for marker in markers]
+            # Check if correct marker is incoming:
+            if targetMarker in markerDescriptions:
+                print "{} in {}".format(targetMarker, markerDescriptions)
+                hist_monitor.button_press()
+                hist_monitor.plot_hist()
+            
 
-        # Put data at the end of actual buffer
-        ''' WE STOPPED HERE'''
-        ''' WE STOPPED HERE'''
-        ''' WE STOPPED HERE'''
-        ''' WE STOPPED HERE'''
+        # Put data at the end of actual buffer       
         data1s.extend(data)
-        # data_reshaped = np.asarray(data1s)
-        # data_reshaped = data_reshaped.reshape(channelCount, len(data1s)/channelCount)
-        # print "data is of shape:"
-        # print data_reshaped.shape
-        # data_reshaped = np.asarray(data).reshape(channelCount, len(data)/channelCount)
-        
-        ch_name = 'Fp2'
-        ch_idx = channelNames.index(ch_name)
-        # data_package = data_reshaped[ch_idx, :]
-
-        # input('')
-        
-        
-        # If more than 1s of data is collected, calculate average power, print it and reset data buffer
-        if len(data1s) == channelCount * 1000000 / samplingInterval:
+                
+        st = time.time()
+        if np.mod(cnt+1, plot_package_interval / package_size) == 0:
             data_reshaped = np.asarray(data1s)
             data_reshaped = data_reshaped.reshape(channelCount, len(data1s)/channelCount)
-            data_package = data_reshaped[ch_idx, :]
-            data_monitor.update(data_package)
+            data_package = data_reshaped[ch_idx, -plot_package_interval:]
+            data_monitor.update(data_package, lagtime=lag_s)    
+
+        # If more than 1s of data is collected, calculate average power, print it and reset data buffer
+        if len(data1s) == channelCount * 1000000 / samplingInterval:
+            # data_reshaped = np.asarray(data1s)
+            # data_reshaped = data_reshaped.reshape(channelCount, len(data1s)/channelCount)
+            # data_package = data_reshaped[ch_idx, :]
+            # data_monitor.update(data_package)
 
             index = int(len(data1s) - channelCount * 1000000 / samplingInterval)
             data1s = data1s[index:]
@@ -206,16 +220,23 @@ while not finish:
                 avg = avg + data1s[i]*data1s[i]*resolutions[i % channelCount]*resolutions[i % channelCount]
 
             avg = avg / len(data1s)
-            print "Average power: " + str(avg)
+            # print "Average power: " + str(avg)
 
             data1s = []
-            
+
+        # Lag Calculation        
+        endTime = time.time()
+        measuredLoopTime = endTime - startTime
+        calculatedEndTime = (theoreticalLooptime*(1 + cnt))
+        lag_s = calculatedEndTime - measuredLoopTime
+        cnt += 1
 
     elif msgtype == 3:
         # Stop message, terminate program
         print "Stop"
         finish = True
 
+    
 # Close tcpip connection
 con.close()
 
