@@ -4,7 +4,7 @@ import numpy as np
 
 class DataMonitor:
    
-    def __init__(self, sr, package_size, window_len_s=10, figsize=(13,6), ylim=(-100, 100)):
+    def __init__(self, sr, package_size, fig=None, window_len_s=10, figsize=(13,6), ylim=(-100, 100)):
         print 'Yay Im initialized'
         # Basic Settings
         self.sr = sr
@@ -15,6 +15,7 @@ class DataMonitor:
         self.cycle = 0
         self.n_cycles = int(round( self.window_size / self.package_size))
         # Plot Settings
+        self.fig = fig
         self.figsize = figsize
         self.ylim = ylim
         self.tolerance = 0.6
@@ -27,9 +28,11 @@ class DataMonitor:
     def initialize_figure(self):
         '''
         '''
-        # plt.ion()
-        self.fig = plt.figure(num=1, figsize=self.figsize)
-        self.ax = self.fig.add_subplot(111)
+        if self.fig is None:
+            self.fig = plt.figure(num=1, figsize=self.figsize)
+            self.ax = self.fig.add_subplot(111)
+        else:
+            self.ax = self.fig.add_subplot(221)
 
         self.fig.canvas.draw()   # note that the first draw comes before setting data 
 
@@ -91,7 +94,7 @@ class DataMonitor:
 
 
 class HistMonitor:
-    def __init__(self, sr, trial_length_s=2.5, baseline_range_s=0.25, histcrit=10, figsize=(13,6)):
+    def __init__(self, sr, fig=None, trial_length_s=2.5, baseline_range_s=0.25, histcrit=10, figsize=(13,6)):
         self.sr = sr
         self.trial_length_s = trial_length_s
         self.baseline_range_s = baseline_range_s
@@ -101,13 +104,19 @@ class HistMonitor:
         self.dataMemory = np.array([np.nan] * int(round(self.trial_length_s*self.sr)))
         self.scpAveragesList = []
         # Figure
+        self.fig = fig
         self.figsize = figsize
         self.initialize_figure()
         
     
     def initialize_figure(self):
-        self.fig = plt.figure(num=2, figsize=self.figsize)
-        self.ax = self.fig.add_subplot(111)
+        ''' Initialize the figure with empty data.'''
+
+        if self.fig is None:
+            self.fig = plt.figure(num=2, figsize=self.figsize)
+            self.ax = self.fig.add_subplot(111)
+        else:
+            self.ax = self.fig.add_subplot(223)
 
         self.fig.canvas.draw()   # note that the first draw comes before setting data 
 

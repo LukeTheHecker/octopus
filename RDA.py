@@ -16,9 +16,13 @@ from socket import *
 from struct import *
 # from test import package_size
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from plot import DataMonitor, HistMonitor
 import time
+from matplotlib.widgets import Button
 # Marker class for storing marker information
 class Marker:
     def __init__(self):
@@ -134,8 +138,27 @@ dur_package = 0.02  # This is fixed
 package_size = int(round(sr*dur_package))
 plot_package_interval = 10 * package_size
 
-data_monitor = DataMonitor(sr, plot_package_interval)
-hist_monitor = HistMonitor(sr)
+fig = plt.figure(num=42, figsize=(13, 6))
+
+
+axprev = plt.axes([0.7, 0.05, 0.1, 0.075])
+axnext = plt.axes([0.81, 0.05, 0.1, 0.075])
+# TODO: Go on here next time!
+# Button stuff
+clicked = False
+def myfun(sweg, clicked=clicked):
+    print clicked
+    clicked = not clicked
+
+bnext = Button(axnext, 'Next')
+bnext.on_clicked(myfun)
+bprev = Button(axprev, 'Previous')
+bprev.on_clicked(myfun)
+# Tkinter stuff
+
+
+data_monitor = DataMonitor(sr, plot_package_interval, fig=fig)
+hist_monitor = HistMonitor(sr, fig=fig)
 # Time lag monitoring
 cnt = 0
 lag_s = 99999
@@ -147,7 +170,12 @@ targetMarker = 'R 14'
 
 #### Main Loop ####
 while not finish:
-    
+
+    # if clicked:
+    #     print "yep"
+    # else:
+    #     print "nope"
+
     # Get message header as raw array of chars
     rawhdr = RecvData(con, 24)
 
