@@ -1,19 +1,23 @@
 import matplotlib.pyplot as plt
+from matplotlib.widgets import Button
 import numpy as np
-
+from util import *
+import asyncio
+# from callbacks import Callbacks
 
 class DataMonitor:
    
-    def __init__(self, sr, package_size, fig=None, window_len_s=10, figsize=(13,6), ylim=(-100, 100)):
-        print 'Yay Im initialized'
+    def __init__(self, sr, update_size, fig=None, window_len_s=10, figsize=(13,6), ylim=(-100, 100)):
+        print('DataMonitor initialized')
         # Basic Settings
         self.sr = sr
         self.window_len_s = window_len_s 
-        self.package_size = package_size
         self.window_size = self.sr * self.window_len_s
+        self.update_size = update_size
         self.n_window = 0
         self.cycle = 0
-        self.n_cycles = int(round( self.window_size / self.package_size))
+        self.n_cycles = int(round( self.window_size / self.update_size))
+        self.block_counter = 0
         # Plot Settings
         self.fig = fig
         self.figsize = figsize
@@ -22,7 +26,6 @@ class DataMonitor:
         # Data structures
         self.time = np.linspace(0, self.window_len_s, self.window_size)
         self.data_window = np.array([np.nan] * self.window_size)
-
         self.initialize_figure()
 
     def initialize_figure(self):
@@ -56,16 +59,21 @@ class DataMonitor:
         Return:
         -------
         '''
-        assert len(data_package) == self.package_size, "Data package is of len {} but must be of len {}".format(len(data_package), self.package_size)
+        assert len(data_package) == self.update_size, "Data package is of len {} but must be of len {}".format(len(data_package), self.update_size)
+        # if any(np.isnan(data_package)):
+            # print("nans in data")
+            # return
+        # insert(self.data_window, data_package)
+        self.data_window[self.cycle*self.update_size:(1 + self.cycle)*self.update_size] = data_package
         
-        self.data_window[self.cycle*self.package_size:(1 + self.cycle)*self.package_size] = data_package
         self.cycle += 1
+        self.block_counter += 1
 
         # If one window is full, start again on left side
         if self.cycle == self.n_cycles:
             self.n_window += 1
 
-            # print "Window is full, starting again \n"
+            # print("Window is full, starting again \n")
 
             self.cycle = 0
             self.time = np.linspace(self.n_window*self.window_len_s, (self.n_window + 1)*self.window_len_s, self.window_size)
@@ -86,6 +94,8 @@ class DataMonitor:
         if lagtime is not None:
             self.title.set_text("Lag = {:.2f} s".format(lagtime))
             plt.draw()
+        
+        
 
         self.fig.canvas.restore_region(self.axbackground)
         self.ax.draw_artist(self.line)
@@ -167,7 +177,14 @@ class HistMonitor:
         self.ax.hist(self.scpAveragesList, bins=bins)
         plt.draw()
 
-        
+class Buttons:
+    def __init__(self, fig, callbacks):
+        self.fig = fig
+        self.callbacks = callbacks
+
+        ax = self.fig.add_axes([0.81, 0.05, 0.1, 0.075])
+        self.buttonPresentationcontrol = Button(ax, 'Start/Stop Experiment')
+        self.buttonPresentationcontrol.on_clicked(self.callbacks.presentToggle)
 
 # Create some signal
 from random import uniform

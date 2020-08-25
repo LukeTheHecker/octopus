@@ -41,15 +41,18 @@ def RecvData(socket, requestedSize):
 # Helper function for splitting a raw array of
 # zero terminated strings (C) into an array of python strings
 def SplitString(raw):
+    print "raw = {} of type {}".format(raw, type(raw))
     stringlist = []
     s = ""
     for i in range(len(raw)):
+        print "raw[{}]={} of type {}".format(i, raw[i], type(raw[i]))
+
         if raw[i] != '\x00':
             s = s + raw[i]
         else:
             stringlist.append(s)
             s = ""
-
+    input("")
     return stringlist
     
 
@@ -68,6 +71,7 @@ def GetProperties(rawdata):
         resolutions.append(restuple[0])
 
     # Extract channel names
+    print('rawdata[12 + 8 * channelCount:]={}'.format(rawdata[12 + 8 * channelCount:]))
     channelNames = SplitString(rawdata[12 + 8 * channelCount:])
 
     return (channelCount, samplingInterval, resolutions, channelNames)
@@ -171,32 +175,32 @@ while not finish:
                 print "Marker " + markers[m].description + " of type " + markers[m].type
 
         # Put data at the end of actual buffer
-        ''' WE STOPPED HERE'''
-        ''' WE STOPPED HERE'''
-        ''' WE STOPPED HERE'''
-        ''' WE STOPPED HERE'''
-        data1s.extend(data)
-        data_reshaped = np.asarray(data1s)
-        data_reshaped = data_reshaped.reshape(channelCount, len(data1s)/channelCount)
-        print "data is of shape:"
-        print data_reshaped.shape
+        # ''' WE STOPPED HERE'''
+        # ''' WE STOPPED HERE'''
+        # ''' WE STOPPED HERE'''
+        # ''' WE STOPPED HERE'''
+        # data1s.extend(data)
+        # data_reshaped = np.asarray(data1s)
+        # data_reshaped = data_reshaped.reshape(channelCount, len(data1s)/channelCount)
+        # print "data is of shape:"
+        # print data_reshaped.shape
         
         
-        ch_name = 'ECG'
-        ch_idx = channelNames.index(ch_name)
-        print ch_idx
-        plt.plot(data_reshaped[ch_idx, :])
-        plt.xlim([0, 1020])
+        # ch_name = 'ECG'
+        # ch_idx = channelNames.index(ch_name)
+        # print ch_idx
+        # plt.plot(data_reshaped[ch_idx, :])
+        # plt.xlim([0, 1020])
         # clear canvas
-        fig.canvas.draw()
+        # fig.canvas.draw()
         
-        if len(data_reshaped[ch_idx, :]) == 1020:
-            # does not work yet
-            fig.canvas.clear()
+        # if len(data_reshaped[ch_idx, :]) == 1020:
+        #     # does not work yet
+        #     fig.canvas.clear()
         # plt.show()
         
         # print data_reshaped[ch_idx, :]
-        
+        print data
         # If more than 1s of data is collected, calculate average power, print it and reset data buffer
         if len(data1s) > channelCount * 1000000 / samplingInterval:
             index = int(len(data1s) - channelCount * 1000000 / samplingInterval)
