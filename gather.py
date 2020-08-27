@@ -7,11 +7,9 @@ from plot import DataMonitor, HistMonitor, Buttons
 import matplotlib.pyplot as plt
 from util import *
 import asyncio
-
+from socket import *
 class Gather:
     def __init__(self, ip="192.168.2.122", port=51244, plot_interval=10, targetMarker='R 14'):
-        self.con = socket(AF_INET, SOCK_STREAM)
-        self.con.connect((ip, port))
         # Data handling
         self.blocks_per_s = 50
         self.block_counter = 0
@@ -25,9 +23,7 @@ class Gather:
         self.lag_s = None
         self.lastBlock = -1
 
-        # Perform main loop until parameters like sr are there.
-        while self.blockSize is None or self.sr is None:
-            self.main()
+        
 
         # External event handling
         self.targetMarker = targetMarker
@@ -35,6 +31,18 @@ class Gather:
         # Callbacks
         self.callbacks = Callbacks()
 
+        # Internal TCP Connection
+        self.internal_tcp_communication()
+
+        # Data TCP Connection (with PC that sends RDA)
+        self.con = socket(AF_INET, SOCK_STREAM)
+        self.con.connect((ip, port))
+
+        # Perform main loop until parameters like sr are there.
+        while self.blockSize is None or self.sr is None:
+            self.main()
+        print(f'self.blockSize={self.blockSize}')
+        print(f'self.sr={self.sr}')
         # Plotting
         self.plot_interval = plot_interval
         self.update_size = self.plot_interval * self.blockSize
@@ -42,21 +50,41 @@ class Gather:
         self.fig = plt.figure(num=42, figsize=(13, 6))
         self.data_monitor = DataMonitor(self.sr, self.update_size, fig=self.fig)
         self.hist_monitor = HistMonitor(self.sr, fig=self.fig)
+
         self.buttons = Buttons(self.fig, self.callbacks)
 
+        
+        
         self.fresh_init()
         print("initialized Gather instance")
 
     def fresh_init(self):
         self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
         self.block_counter = 0
-        self.dataMemory = np.array([np.nan]*int(self.dataMemorySize))  # nan array to store data in
+        try:
+            self.dataMemory = np.array([np.nan]*int(self.dataMemorySize))  # nan array to store data in
+        except:
+            pass
         self.startTime = time.time()
-        
+    
+    def internal_tcp_communication(self):
+        TCP_IP = '192.168.2.128'  # '127.0.0.1'
+        TCP_PORT = 5005
+        BUFFER_SIZE = 1024
+
+        s = socket(AF_INET, SOCK_STREAM)
+        print("socket created")
+
+        s.bind((TCP_IP, TCP_PORT))
+        print("binded")
+
+        s.listen(1)
+
+        self.tcpInternal, addr = s.accept()
+        print("Internal TCP Communication Established")
+
     def main(self):
-        # finish = False
-        # while not finish:
-                
+
         # Get message header as raw array of chars
         self.rawhdr = self.RecvData(24)
 
@@ -90,6 +118,10 @@ class Gather:
             self.data = np.array([np.nan] * int(self.blockSize))
 
         elif msgtype == 4:
+            if self.block_counter == 0:
+                self.startTime = time.time()
+                print("resetted time!")
+
             # Data message, extract data and markers
             self.GetData()
             self.hist_monitor.update_data(self.data)
@@ -107,38 +139,43 @@ class Gather:
                 if self.targetMarker in markerDescriptions:
                     self.hist_monitor.button_press()
                     self.hist_monitor.plot_hist()
-            # TODO: delete unnecessary prints
-            # print(np.mean(self.dataMemory))
-            
-            # Asynchronous plot
+
+            # (Asynchronous) plot
             if np.mod(self.block_counter, self.plot_interval) == 0:
+                
+                # Internal TCP Communication (e.g. stop stimulus presentation) 
+                # every few blocks only
+                state = self.callbacks.state
+                msg = int(state).to_bytes(1, byteorder='big')
+                self.tcpInternal.send(msg)
+                print(f'sent message {msg}')
+
+
                 data_for_plot = self.dataMemory[-self.update_size:]
 
                 stt = time.time()
 
-                
                 self.data_monitor.update(data_for_plot, lagtime=self.lag_s)
                 endd = time.time()
-                print(f'time elapsed: {1000*(endd-stt):.2f}')
+                # print(f'time elapsed: {1000*(endd-stt):.2f} ms')
 
             # Lag Calculation        
             if self.startTime is not None:
                 endTime = time.time()
                 measuredLoopTime = endTime - self.startTime
-                calculatedEndTime = (self.theoreticalLooptime*(self.block_counter))
-                # print(calculatedEndTime)
-                self.lag_s = calculatedEndTime - measuredLoopTime
-  
-            
-                
+                calculatedEndTime = (self.theoreticalLooptime*(self.block_counter+1))
+                # print(f'measuredLoopTime={measuredLoopTime}')
+                # print(f'calculatedEndTime={calculatedEndTime}')
+                self.lag_s = calculatedEndTime - measuredLoopTime              
 
         elif msgtype == 3:
             # Stop message, terminate program
             print("Stop")
             self.quit()
 
-        # Close tcpip connection
-        # 
+        
+
+        
 
 
     # Helper function for receiving whole message
@@ -253,32 +290,21 @@ class Marker:
 # fig = plt.figure(num=42, figsize=(13, 6))
 
 gather = Gather()
-# data_monitor = DataMonitor(gather.sr, gather.blockSize, fig=fig)
 
-# hist_monitor = HistMonitor(gather.sr, fig=fig)
-
-gather.fresh_init()
 cnt = 0
+# start = time.time()
 while True:
-    # cnt +=1
+    cnt +=1
+    # print(f"start time before: {gather.startTime}")
+    # print(f'block_counter={gather.block_counter}')
     gather.main()
+    # end = time.time()
+    # print(f'measured Outside loop={end-start}')
+    # print(f"start time after: {gather.startTime}")
+    # print(f'block_counter={gather.block_counter}')
+    # if cnt == 100:
+    #     break
 
-# data_monitor = DataMonitor(250, 10*5)
 
-# plot_dur = []
-# for _ in range(100):
-#     start = time.time()
-#     data_monitor.update(np.random.randn(50))
-#     end = time.time()
-#     plot_dur.append(end-start)
-# mean_dur = np.mean(plot_dur)
+# tasks = [gather.main(), data_monitor.update(gather.data), hist_monitor.update(gather_data, marker)]
 
-# plt.clf()
-
-# data_monitor = DataMonitor(250, 10*5)
-# start = None 
-# while True:
-#     if start is None:
-#         start = time.time()
-#     data_monitor.update(np.random.randn(50), lagtime=time.time()-start)
-#     time.sleep(0.2 - mean_dur)
