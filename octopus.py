@@ -5,6 +5,8 @@ from plot import DataMonitor, HistMonitor, Buttons
 from communication import InternalTCP
 import select
 import time
+
+
 class Octopus:
     def __init__(self, figsize=(13, 6), update_frequency=10, scp_trial_duration=2.5, 
         scp_baseline_duration=0.25, histcrit=5, targetMarker='response', ):
@@ -84,7 +86,7 @@ class Octopus:
 
             self.communicate_state()
 
-        # self.gatherer.quit()
+        self.gatherer.quit()
 
 octopus = Octopus()
 octopus.main()
