@@ -1,5 +1,6 @@
 from callbacks import Callbacks
 from socket import *
+import select
 from struct import *
 import numpy as np
 import time
@@ -8,13 +9,29 @@ import matplotlib.pyplot as plt
 from util import *
 import asyncio
 from socket import *
+import sys
+sys.path.insert(1, 'C:/Users/Lukas/Documents/projects/libet_presentation/presentation/')
+from tcp import CustomSocket
+
 class Gather:
-    def __init__(self, ip="192.168.2.122", port=51244, plot_interval=10, targetMarker='R 14'):
+    def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response'):
+        ''' 
+        Parameters:
+        -----------
+        ip : str, IP adress of the PC that sends remote data access (RDA) of the brain 
+            vision recorder software
+        port : int, corresponding port (see above)
+        plot_interval : int/float, interval in seconds in which to update data stream plot
+            (affects DataMonitor class, method: .update())
+        targetMarker : str, marker of button press (deprecated)
+
+        '''
+
         # Data handling
         self.blocks_per_s = 50
         self.block_counter = 0
         self.dataMemoryDurS = 5  # seconds of data memory
-        self.block_dur_s = 0.02
+        self.block_dur_s = 1.0/self.blocks_per_s
         self.blockSize = None
         self.sr = None
         # Here the block number will be assigned to each piece of data in dataMemory
@@ -23,35 +40,15 @@ class Gather:
         self.lag_s = None
         self.lastBlock = -1
 
-        
-
-        # External event handling
-        self.targetMarker = targetMarker
-
-        # Callbacks
-        self.callbacks = Callbacks()
-
-        # Internal TCP Connection
-        self.internal_tcp_communication()
 
         # Data TCP Connection (with PC that sends RDA)
         self.con = socket(AF_INET, SOCK_STREAM)
         self.con.connect((ip, port))
+        
 
         # Perform main loop until parameters like sr are there.
         while self.blockSize is None or self.sr is None:
             self.main()
-        print(f'self.blockSize={self.blockSize}')
-        print(f'self.sr={self.sr}')
-        # Plotting
-        self.plot_interval = plot_interval
-        self.update_size = self.plot_interval * self.blockSize
-
-        self.fig = plt.figure(num=42, figsize=(13, 6))
-        self.data_monitor = DataMonitor(self.sr, self.update_size, fig=self.fig)
-        self.hist_monitor = HistMonitor(self.sr, fig=self.fig)
-
-        self.buttons = Buttons(self.fig, self.callbacks)
 
         
         
@@ -66,25 +63,12 @@ class Gather:
         except:
             pass
         self.startTime = time.time()
+        self.block = 0
     
-    def internal_tcp_communication(self):
-        TCP_IP = '192.168.2.128'  # '127.0.0.1'
-        TCP_PORT = 5005
-        BUFFER_SIZE = 1024
 
-        s = socket(AF_INET, SOCK_STREAM)
-        print("socket created")
-
-        s.bind((TCP_IP, TCP_PORT))
-        print("binded")
-
-        s.listen(1)
-
-        self.tcpInternal, addr = s.accept()
-        print("Internal TCP Communication Established")
 
     def main(self):
-
+    
         # Get message header as raw array of chars
         self.rawhdr = self.RecvData(24)
 
@@ -118,54 +102,23 @@ class Gather:
             self.data = np.array([np.nan] * int(self.blockSize))
 
         elif msgtype == 4:
+
             if self.block_counter == 0:
                 self.startTime = time.time()
-                print("resetted time!")
 
             # Data message, extract data and markers
             self.GetData()
-            self.hist_monitor.update_data(self.data)
+            
             # Check for overflow
             if self.lastBlock != -1 and self.block > self.lastBlock + 1:
                 print("*** Overflow with " + str(self.block - self.lastBlock) + " datablocks ***" )
             self.lastBlock = self.block
-
-            # Print markers, if there are some in actual block
-            if self.markerCount > 0:
-                for m in range(self.markerCount):
-                    print("Marker " + self.markers[m].description + " of type " + self.markers[m].type)
-                markerDescriptions = [marker.description for marker in self.markers]
-                # Check if correct marker is incoming:
-                if self.targetMarker in markerDescriptions:
-                    self.hist_monitor.button_press()
-                    self.hist_monitor.plot_hist()
-
-            # (Asynchronous) plot
-            if np.mod(self.block_counter, self.plot_interval) == 0:
-                
-                # Internal TCP Communication (e.g. stop stimulus presentation) 
-                # every few blocks only
-                state = self.callbacks.state
-                msg = int(state).to_bytes(1, byteorder='big')
-                self.tcpInternal.send(msg)
-                print(f'sent message {msg}')
-
-
-                data_for_plot = self.dataMemory[-self.update_size:]
-
-                stt = time.time()
-
-                self.data_monitor.update(data_for_plot, lagtime=self.lag_s)
-                endd = time.time()
-                # print(f'time elapsed: {1000*(endd-stt):.2f} ms')
 
             # Lag Calculation        
             if self.startTime is not None:
                 endTime = time.time()
                 measuredLoopTime = endTime - self.startTime
                 calculatedEndTime = (self.theoreticalLooptime*(self.block_counter+1))
-                # print(f'measuredLoopTime={measuredLoopTime}')
-                # print(f'calculatedEndTime={calculatedEndTime}')
                 self.lag_s = calculatedEndTime - measuredLoopTime              
 
         elif msgtype == 3:
@@ -230,6 +183,7 @@ class Gather:
 
         # Extract numerical data
         (self.block, self.points, self.markerCount) = unpack('<LLL', self.rawdata[:12])
+        print(self.block)
         # Extract eeg data as array of floats
         self.old_data = self.data.copy()
         self.data = []
@@ -286,25 +240,4 @@ class Marker:
         self.channel = -1
         self.type = ""
         self.description = ""
-
-# fig = plt.figure(num=42, figsize=(13, 6))
-
-gather = Gather()
-
-cnt = 0
-# start = time.time()
-while True:
-    cnt +=1
-    # print(f"start time before: {gather.startTime}")
-    # print(f'block_counter={gather.block_counter}')
-    gather.main()
-    # end = time.time()
-    # print(f'measured Outside loop={end-start}')
-    # print(f"start time after: {gather.startTime}")
-    # print(f'block_counter={gather.block_counter}')
-    # if cnt == 100:
-    #     break
-
-
-# tasks = [gather.main(), data_monitor.update(gather.data), hist_monitor.update(gather_data, marker)]
 

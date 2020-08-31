@@ -1,28 +1,32 @@
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 import numpy as np
+from numpy.core.shape_base import block
 from util import *
 import asyncio
 # from callbacks import Callbacks
 
 class DataMonitor:
    
-    def __init__(self, sr, update_size, fig=None, window_len_s=10, figsize=(13,6), ylim=(-100, 100)):
+    def __init__(self, sr, block_size, fig=None, window_len_s=10, figsize=(13,6), ylim=(-100, 100), update_frequency=10):
         print('DataMonitor initialized')
         # Basic Settings
         self.sr = sr
         self.window_len_s = window_len_s 
         self.window_size = self.sr * self.window_len_s
-        self.update_size = update_size
         self.n_window = 0
-        self.cycle = 0
-        self.n_cycles = int(round( self.window_size / self.update_size))
-        self.block_counter = 0
+        self.block_size = block_size
+        self.block_duration = self.block_size / float(self.sr)
+        assert round(self.window_size / self.block_size) == self.window_size / self.block_size, 'window size not divisible by block size, please adjust window size'
+        self.n_blocks = int(self.window_size / self.block_size)
+        self.blockMemory = [-1] * self.n_blocks
+        self.blockCount = 0
         # Plot Settings
         self.fig = fig
         self.figsize = figsize
         self.ylim = ylim
         self.tolerance = 0.6
+        self.update_frequency = update_frequency
         # Data structures
         self.time = np.linspace(0, self.window_len_s, self.window_size)
         self.data_window = np.array([np.nan] * self.window_size)
@@ -50,7 +54,7 @@ class DataMonitor:
         plt.show(block=False)
 
 
-    def update(self, data_package, lagtime=None):
+    def update(self, gatherer):
         ''' This method takes a data_package and plots it at the appropriate position in the data monitor plot
         Parameters:
         -----------
@@ -59,23 +63,54 @@ class DataMonitor:
         Return:
         -------
         '''
-        assert len(data_package) == self.update_size, "Data package is of len {} but must be of len {}".format(len(data_package), self.update_size)
-        # if any(np.isnan(data_package)):
-            # print("nans in data")
-            # return
-        # insert(self.data_window, data_package)
-        self.data_window[self.cycle*self.update_size:(1 + self.cycle)*self.update_size] = data_package
-        
-        self.cycle += 1
-        self.block_counter += 1
+        dataMemory = gatherer.dataMemory
+        IncomingBlockMemory = gatherer.blockMemory
+        lagtime = gatherer.lag_s
 
+        if np.max(IncomingBlockMemory) <= np.max(self.blockMemory):
+            # all blocks have been plotted
+            return
+
+        n_new_blocks = int(np.max(IncomingBlockMemory) - np.max(self.blockMemory))
+        
+        if n_new_blocks * self.block_duration < 1 / self.update_frequency:
+            return
+        new_blocks = np.arange(np.max(self.blockMemory) + 1, np.max(self.blockMemory) + 1 + n_new_blocks).astype(int)
+        # print(f'new_blocks={new_blocks}')
+        # Block count of the first block that is new
+        first_new_block = np.max(self.blockMemory) + 1
+        # Block position that shall be replaced first
+        block_of_first_replacement = first_new_block % self.n_blocks
+        # Index of said block position
+        idx_of_first_replacement = int(block_of_first_replacement * self.block_size)
+        # print(f'idx_of_first_replacement={idx_of_first_replacement}')
+        # Extract new portion of data
+        data_pack = dataMemory[-n_new_blocks*self.block_size:]
+
+        # If new portion of data goes beyong the window boundary:
+        if idx_of_first_replacement + len(data_pack) > self.window_size:
+            new_win = True
+            self.data_window[idx_of_first_replacement:] = data_pack[0:len(self.data_window[idx_of_first_replacement:])]
+
+            if len(self.data_window[idx_of_first_replacement:]) != len(data_pack):
+                remainder_length = int(len(data_pack) - len(data_pack[0:len(self.data_window[idx_of_first_replacement:])]))
+                print(remainder_length)
+                self.data_window[0:remainder_length] = data_pack[len(self.data_window[idx_of_first_replacement:]):]
+        else:
+            self.data_window[idx_of_first_replacement:idx_of_first_replacement+len(data_pack)] = data_pack
+            # print(f'new_blocks: {new_blocks}')
+            # print(f'np.mod(new_blocks, self.window_size)={np.mod(new_blocks, self.window_size / self.n_blocks)}')
+            if any(np.mod(new_blocks, self.window_size / self.block_size) == 0):
+                new_win = True
+            else:
+                new_win = False
+        # print(f'new_win={new_win}')
         # If one window is full, start again on left side
-        if self.cycle == self.n_cycles:
+        if new_win and self.blockCount != 0:
             self.n_window += 1
 
             # print("Window is full, starting again \n")
 
-            self.cycle = 0
             self.time = np.linspace(self.n_window*self.window_len_s, (self.n_window + 1)*self.window_len_s, self.window_size)
 
             self.line.set_data(self.time, self.data_window)
@@ -95,23 +130,27 @@ class DataMonitor:
             self.title.set_text("Lag = {:.2f} s".format(lagtime))
             plt.draw()
         
-        
 
         self.fig.canvas.restore_region(self.axbackground)
         self.ax.draw_artist(self.line)
         self.fig.canvas.blit(self.ax.bbox)
         self.fig.canvas.flush_events()
 
+        
+        self.blockMemory = IncomingBlockMemory
+        self.blockCount += n_new_blocks
+
 
 class HistMonitor:
-    def __init__(self, sr, fig=None, trial_length_s=2.5, baseline_range_s=0.25, histcrit=10, figsize=(13,6)):
+    def __init__(self, sr, fig=None, scp_trial_duration=2.5, scp_baseline_duration=0.25, 
+            histcrit=10, figsize=(13,6)):
         self.sr = sr
-        self.trial_length_s = trial_length_s
-        self.baseline_range_s = baseline_range_s
+        self.scp_trial_duration = scp_trial_duration
+        self.scp_baseline_duration = scp_baseline_duration
         self.histcrit = histcrit
         self.package_size = None
         # Data
-        self.dataMemory = np.array([np.nan] * int(round(self.trial_length_s*self.sr)))
+        self.dataMemory = np.array([np.nan] * int(round(self.scp_trial_duration*self.sr)))
         self.scpAveragesList = []
         # Figure
         self.fig = fig
@@ -162,7 +201,7 @@ class HistMonitor:
         '''
         tmpSCP = self.dataMemory.copy()
         # Correct baseline
-        tmpSCP -= np.mean(tmpSCP[0:int(self.baseline_range_s*self.sr)])
+        tmpSCP -= np.mean(tmpSCP[0:int(self.scp_baseline_duration*self.sr)])
         self.scpAveragesList.append(np.mean(tmpSCP))
 
     def plot_hist(self):
