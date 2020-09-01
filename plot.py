@@ -75,6 +75,7 @@ class DataMonitor:
         
         if n_new_blocks * self.block_duration < 1 / self.update_frequency:
             return
+
         new_blocks = np.arange(np.max(self.blockMemory) + 1, np.max(self.blockMemory) + 1 + n_new_blocks).astype(int)
         # print(f'new_blocks={new_blocks}')
         # Block count of the first block that is new
@@ -94,7 +95,7 @@ class DataMonitor:
 
             if len(self.data_window[idx_of_first_replacement:]) != len(data_pack):
                 remainder_length = int(len(data_pack) - len(data_pack[0:len(self.data_window[idx_of_first_replacement:])]))
-                print(remainder_length)
+                # print(remainder_length)
                 self.data_window[0:remainder_length] = data_pack[len(self.data_window[idx_of_first_replacement:]):]
         else:
             self.data_window[idx_of_first_replacement:idx_of_first_replacement+len(data_pack)] = data_pack
@@ -156,6 +157,7 @@ class HistMonitor:
         self.fig = fig
         self.figsize = figsize
         self.initialize_figure()
+        print("HistMonitor initialized")
         
     
     def initialize_figure(self):

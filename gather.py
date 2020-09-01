@@ -183,7 +183,6 @@ class Gather:
 
         # Extract numerical data
         (self.block, self.points, self.markerCount) = unpack('<LLL', self.rawdata[:12])
-        print(self.block)
         # Extract eeg data as array of floats
         self.old_data = self.data.copy()
         self.data = []

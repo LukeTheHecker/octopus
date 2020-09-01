@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from callbacks import Callbacks
 from gather import Gather
 from plot import DataMonitor, HistMonitor, Buttons
+from util import Scheduler
 from communication import InternalTCP
 import select
 import time
@@ -49,7 +50,6 @@ class Octopus:
     def check_response(self):
         '''Receive response from participant through internal TCP connection with the 
             libet presentation'''
-        check_response_frequency = 10
         # if n_new_blocks * self.block_duration < 1 / self.update_frequency:
         # self.gatherer.block_counter 
 
@@ -76,15 +76,21 @@ class Octopus:
         data monitoring, event handling.
         '''
         self.gatherer.fresh_init()
+        
+        # Schedule some functions
+        
+        scheduled_functions = [self.check_response, self.communicate_state]
+        start = time.time()
+        interval = 0.1  # seconds
+        scheduler = Scheduler(scheduled_functions, start, interval)
+        
         while not self.callbacks.quit:
 
             self.gatherer.main()
             self.data_monitor.update(self.gatherer)
-            self.hist_monitor.update_data(self.gatherer.data)
-
-            self.check_response()
-
-            self.communicate_state()
+            self.hist_monitor.update_data(self.gatherer.data)  # check that data isnt stored twice
+            scheduler.run()
+            
 
         self.gatherer.quit()
 
