@@ -33,6 +33,6 @@ class Scheduler:
         end = time.time()
         # Execute all functions if interval is given
         if round(end - self.start, 1)  != 0 and round(end - self.start, 1) % round(self.interval * self.cnt, 1) == 0:
-            print(f"Run functions at {round(end-self.start, 1)}")
+            # print(f"Run functions at {round(end-self.start, 1)}")
             self.cnt += 1
             [fun() for fun in self.list_of_functions]

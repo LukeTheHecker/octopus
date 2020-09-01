@@ -27,3 +27,6 @@ class  InternalTCP:
         self.con.setblocking(0)
 
         print("Internal TCP Communication Established")
+        
+    def quit(self):
+        self.con.close()

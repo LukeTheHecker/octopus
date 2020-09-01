@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button
+from matplotlib.widgets import Button, TextBox
 import numpy as np
 from numpy.core.shape_base import block
 from util import *
@@ -144,7 +144,8 @@ class DataMonitor:
 
 class HistMonitor:
     def __init__(self, sr, fig=None, scp_trial_duration=2.5, scp_baseline_duration=0.25, 
-            histcrit=10, figsize=(13,6)):
+            histcrit=5, figsize=(13,6)):
+        
         self.sr = sr
         self.scp_trial_duration = scp_trial_duration
         self.scp_baseline_duration = scp_baseline_duration
@@ -157,6 +158,8 @@ class HistMonitor:
         self.fig = fig
         self.figsize = figsize
         self.initialize_figure()
+        # Action Paramters
+        self.current_state = None
         print("HistMonitor initialized")
         
     
@@ -223,35 +226,31 @@ class Buttons:
         self.fig = fig
         self.callbacks = callbacks
 
-        ax = self.fig.add_axes([0.81, 0.05, 0.1, 0.075])
+        ax = self.fig.add_axes([0.75, 0.45, 0.1, 0.075])
         self.buttonPresentationcontrol = Button(ax, 'Start/Stop Experiment')
         self.buttonPresentationcontrol.on_clicked(self.callbacks.presentToggle)
-
-# Create some signal
-from random import uniform
-
-sr = 500  # Hz
-total_dur_s = 10
-time = np.linspace(0, total_dur_s, total_dur_s * sr)
-n_oscillators = 100
-signal = np.zeros((len(time)))
-
-for osci in range(n_oscillators):
-    freq = uniform(0.01, 15)
-    multiplyer = 1/freq
-    signal = signal + np.sin(time * 2 * np.pi * freq) * multiplyer
-
-signal = (signal / np.max(np.abs(signal))) * 30
+        ax = self.fig.add_axes([0.9, 0.05, 0.1, 0.075])
+        self.buttonQuit = Button(ax, 'Quit')
+        self.buttonQuit.on_clicked(self.callbacks.quitexperiment)
+        ax = self.fig.add_axes([0.85, 0.4, 0.1, 0.075])
+        self.buttonforward = Button(ax, '->')
+        self.buttonforward.on_clicked(self.callbacks.stateforward)
+        ax = self.fig.add_axes([0.75, 0.4, 0.1, 0.075])
+        self.buttonbackwards = Button(ax, '<-')
+        self.buttonbackwards.on_clicked(self.callbacks.statebackwards)
 
 
-        
 
-# sr = 500
-# package_size = 20
-# data_monitor = DataMonitor(sr, package_size)
 
-# while True:
-#     data_monitor.update(np.random.randn(package_size))
-#     plt.pause(0.01)
 
-# input('')
+
+class Textbox:
+    def __init__(self, fig):
+        self.fig = fig
+        ax = self.fig.add_subplot(222)
+
+        ax.xaxis.set_visible(False) 
+        ax.yaxis.set_visible(False)
+
+        # ax = self.fig.add_axes([0.1, 0.05, 0.2, 0.1])
+        self.statusBox = ax.text(0.05, 0.75, "Status", fontsize=16)
