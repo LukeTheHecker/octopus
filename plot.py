@@ -4,6 +4,7 @@ import numpy as np
 from numpy.core.shape_base import block
 from util import *
 import asyncio
+import seaborn as sns
 # from callbacks import Callbacks
 
 class DataMonitor:
@@ -218,7 +219,8 @@ class HistMonitor:
         # Clear axis
         self.ax.cla()
         # Plot hist
-        self.ax.hist(self.scpAveragesList, bins=bins)
+        ax = sns.distplot(self.scpAveragesList, ax=self.ax)
+        # self.ax.hist(self.scpAveragesList, bins=bins)
         plt.draw()
 
 class Buttons:

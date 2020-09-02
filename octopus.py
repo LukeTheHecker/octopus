@@ -141,13 +141,14 @@ class Octopus:
         
         if (self.current_state == 2 or self.current_state == 4) and self.callbacks.allow_presentation:
             # Interview must be over
-            print("Interview must be over!")
+            print("Interview is over, lets continue!")
             self.current_state += 1
 
         if self.current_state == 5 or self.callbacks.quit == True:
             # Save experiment
             #...
             # Quit experiment
+            print("Quitting...")
             self.gatherer.quit()
             self.internal_tcp.quit()
 
@@ -186,6 +187,7 @@ class Octopus:
 
         if not self.go_interview:
                     print("SCP not large enough")
+
     def get_statelist(self):
         ''' Here the number and description of states will be defined.
         '''
