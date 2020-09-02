@@ -27,12 +27,24 @@ class Scheduler:
         self.start = start
         self.interval = interval
         self.cnt = 1
+        self.run_hist_intervals = []
         print("Initialized Scheduler")
 
     def run(self):
         end = time.time()
+        current_time = round(end-self.start, 1)
+
+        # Check if we maybe missed a round:
+        target_time = round(self.interval * self.cnt, 1)
+        # If difference between current time and the time when we want to start an interview is 
+        # larger than two intervals we must have skipped something (because of timing issues).
+        if current_time != 0 and (current_time - target_time) >= self.interval*2:
+            self.cnt = int(round(current_time / self.interval))
+            # print(f"missed at least a round, adjusting self.cnt to {self.cnt:.0f}!")
+
         # Execute all functions if interval is given
-        if round(end - self.start, 1)  != 0 and round(end - self.start, 1) % round(self.interval * self.cnt, 1) == 0:
-            # print(f"Run functions at {round(end-self.start, 1)}")
+        if current_time  != 0 and current_time % target_time == 0:
+            # print(f"Run functions {[t.__name__ for t in self.list_of_functions]} at {current_time}")
+            self.run_hist_intervals.append(current_time)
             self.cnt += 1
             [fun() for fun in self.list_of_functions]

@@ -3,7 +3,7 @@ from callbacks import Callbacks
 from gather import Gather
 from plot import DataMonitor, HistMonitor, Buttons, Textbox
 from util import Scheduler
-from communication import InternalTCP
+from communication import TCP
 import select
 import time
 import numpy as np
@@ -44,7 +44,7 @@ class Octopus:
         # Objects 
         self.callbacks = Callbacks()
         self.gatherer = Gather()
-        self.internal_tcp = InternalTCP()
+        self.internal_tcp = TCP()
 
         # Figure
         self.fig = plt.figure(num=42, figsize=figsize)
@@ -76,16 +76,15 @@ class Octopus:
                 self.checkState(recent_response=True)
 
     def communicate_state(self):
-        ''' This method communicates via the internal TCP Port that is connected with 
+        ''' This method communicates via the TCP Port that is connected with 
             the libet presentation.
         '''
-        # Communicate
+        # Send Current state (allow or forbid) to the libet presentation
         allow_presentation = self.callbacks.allow_presentation
         msg = int(allow_presentation).to_bytes(1, byteorder='big')
         self.internal_tcp.con.send(msg)
-
-        # Adjust GUI
-        self.buttons.buttonPresentationcontrol.label.set_text(self.callbacks.permission_statement[allow_presentation])
+        # print(f'sending state {int(allow_presentation)}')
+        
     
     def main(self):
         ''' Join tasks together in an asynchronous manner: Data gathering, 
@@ -97,7 +96,7 @@ class Octopus:
         
         scheduled_functions = [self.checkState, self.check_response, self.communicate_state]
         start = time.time()
-        interval = 0.05  # seconds
+        interval = 0.1  # seconds
         scheduler = Scheduler(scheduled_functions, start, interval)
         
         scheduled_functions = [self.checkUI]
@@ -105,24 +104,26 @@ class Octopus:
         interval = 0.2  # seconds
         scheduler_slow = Scheduler(scheduled_functions, start, interval)
 
-
-
         while not self.callbacks.quit:
 
             self.gatherer.main()
             self.data_monitor.update(self.gatherer)
             self.hist_monitor.update_data(self.gatherer.data)  # check that data isnt stored twice
+
             scheduler.run()
             scheduler_slow.run()
 
         self.gatherer.quit()
-        
+
+
     def checkUI(self):
-        self.current_state =  np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
+        self.current_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
 
         self.callbacks.stateChange = 0
         if self.callbacks.quit == True:
             self.current_state = 5
+        # Adjust GUI
+        self.buttons.buttonPresentationcontrol.label.set_text(self.callbacks.permission_statement[self.callbacks.allow_presentation])
 
     def checkState(self, recent_response=False):
         ''' This method specifies the current state of the experiment.
@@ -155,7 +156,6 @@ class Octopus:
             self.internal_tcp.quit()
 
         self.textbox.statusBox.set_text(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
-
     
     def check_if_interview(self):
         

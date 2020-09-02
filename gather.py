@@ -10,7 +10,6 @@ from util import *
 import asyncio
 from socket import *
 import sys
-sys.path.insert(1, 'C:/Users/Lukas/Documents/projects/libet_presentation/presentation/')
 from tcp import CustomSocket
 
 class Gather:
@@ -39,7 +38,7 @@ class Gather:
         self.startTime = None
         self.lag_s = None
         self.lastBlock = -1
-
+        self.first_block_ever = None
 
         # Data TCP Connection (with PC that sends RDA)
         self.con = socket(AF_INET, SOCK_STREAM)
@@ -63,12 +62,10 @@ class Gather:
         except:
             pass
         self.startTime = time.time()
-        self.block = 0
     
 
 
     def main(self):
-    
         # Get message header as raw array of chars
         self.rawhdr = self.RecvData(24)
 
@@ -118,7 +115,7 @@ class Gather:
             if self.startTime is not None:
                 endTime = time.time()
                 measuredLoopTime = endTime - self.startTime
-                calculatedEndTime = (self.theoreticalLooptime*(self.block_counter+1))
+                calculatedEndTime = (self.theoreticalLooptime*(self.block-self.first_block_ever))  # (self.block_counter+1))
                 self.lag_s = calculatedEndTime - measuredLoopTime              
 
         elif msgtype == 3:
@@ -183,6 +180,10 @@ class Gather:
 
         # Extract numerical data
         (self.block, self.points, self.markerCount) = unpack('<LLL', self.rawdata[:12])
+
+        if self.first_block_ever is None:
+            self.first_block_ever = self.block
+
         # Extract eeg data as array of floats
         self.old_data = self.data.copy()
         self.data = []

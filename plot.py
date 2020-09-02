@@ -225,8 +225,14 @@ class HistMonitor:
         # Clear axis
         self.ax.cla()
         # Plot hist
-        ax = sns.distplot(self.scpAveragesList, ax=self.ax)
+        sns.distplot(self.scpAveragesList, ax=self.ax)
         # self.ax.hist(self.scpAveragesList, bins=bins)
+
+        # Update title
+        self.n_responses = len(self.scpAveragesList)
+        self.title = f'Histogram of {self.n_responses} responses'
+        self.ax.set_title(self.title, fontsize=14)
+
         plt.draw()
 
 class Buttons:
@@ -234,16 +240,19 @@ class Buttons:
         self.fig = fig
         self.callbacks = callbacks
 
-        ax = self.fig.add_axes([0.75, 0.45, 0.1, 0.075])
-        self.buttonPresentationcontrol = Button(ax, 'Start/Stop Experiment')
+        ax = self.fig.add_axes([0.70, 0.4, 0.1, 0.075])
+        self.buttonPresentationcontrol = Button(ax, '')
         self.buttonPresentationcontrol.on_clicked(self.callbacks.presentToggle)
-        ax = self.fig.add_axes([0.9, 0.05, 0.1, 0.075])
+
+        ax = self.fig.add_axes([0.85, 0.05, 0.1, 0.075])
         self.buttonQuit = Button(ax, 'Quit')
         self.buttonQuit.on_clicked(self.callbacks.quitexperiment)
-        ax = self.fig.add_axes([0.85, 0.4, 0.1, 0.075])
+
+        ax = self.fig.add_axes([0.75, 0.30, 0.05, 0.075])
         self.buttonforward = Button(ax, '->')
         self.buttonforward.on_clicked(self.callbacks.stateforward)
-        ax = self.fig.add_axes([0.75, 0.4, 0.1, 0.075])
+
+        ax = self.fig.add_axes([0.7, 0.30, 0.05, 0.075])
         self.buttonbackwards = Button(ax, '<-')
         self.buttonbackwards.on_clicked(self.callbacks.statebackwards)
 

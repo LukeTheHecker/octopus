@@ -1,11 +1,10 @@
 from socket import *
 import sys
-sys.path.insert(1, "C:/Users/Lukas/Documents/projects/libet_presentation/presentation/")
 from tcp import CustomSocket
 
 
-class  InternalTCP:
-    def __init__(self, IP='192.168.2.128', port=5005, BufferSize=1024, encoding='utf-8', timeout=0.01):
+class TCP:
+    def __init__(self, IP='192.168.2.122', port=5005, BufferSize=1024, encoding='utf-8', timeout=0.01):
         ''' This method creates an internal socket connection which enables 
         communication between this neurofeedback program and the libet stimulus
         presentation program. 
@@ -26,7 +25,7 @@ class  InternalTCP:
         # Put Socket in non-blocking mode:
         self.con.setblocking(0)
 
-        print("Internal TCP Communication Established")
+        print("TCP Communication Established")
         
     def quit(self):
         self.con.close()
