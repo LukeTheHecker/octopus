@@ -13,7 +13,8 @@ import random
 
 class Octopus:
     def __init__(self, figsize=(13, 6), update_frequency=10, scp_trial_duration=2.5, 
-        scp_baseline_duration=0.25, histcrit=5, targetMarker='response', ):
+        scp_baseline_duration=0.25, histcrit=5, targetMarker='response', 
+        second_interview_delay=5):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
         Parameters:
@@ -38,7 +39,7 @@ class Octopus:
         self.targetMarker = targetMarker
         self.responded = False
         self.get_statelist()
-
+        self.second_interview_delay = second_interview_delay
 
         # Objects 
         self.callbacks = Callbacks()
@@ -47,6 +48,7 @@ class Octopus:
 
         # Figure
         self.fig = plt.figure(num=42, figsize=figsize)
+        self.fig.tight_layout(pad=2)
         self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, fig=self.fig, update_frequency=self.update_frequency)
         self.hist_monitor = HistMonitor(self.gatherer.sr, fig=self.fig, 
             scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit, figsize=figsize)
@@ -156,8 +158,11 @@ class Octopus:
 
     
     def check_if_interview(self):
-        if not self.hist_monitor.scpAveragesList or len(self.hist_monitor.scpAveragesList) < self.hist_monitor.histcrit:
-            print("too few SCPs in list, why are we in sucha  state????")
+        
+        n_scps = len(self.hist_monitor.scpAveragesList)
+
+        if n_scps < self.hist_monitor.histcrit:
+            print("Too few SCPs in list.")
             self.go_interview = False
             return
 
@@ -169,24 +174,33 @@ class Octopus:
 
         # if we are right before first interview:
         if self.current_state == 1:
+            # Check in which condition we are:
             key = self.cond_order[0]
             condition = self.conds[key]
+
             if condition == 'Positive':
                 self.go_interview = last_scp > avg_scp + sd_scp
             elif condition == 'Negative':
                 self.go_interview = last_scp < avg_scp - sd_scp
+            # Save how many trials it took until the first interview was started
+            self.trials_until_first_interview = n_scps
 
-            
+        # if we are right before second interview:
         elif self.current_state == 3:
             key = self.cond_order[1]
             condition = self.conds[key]
-            if condition == 'Positive':
-                self.go_interview = last_scp > avg_scp + sd_scp
-            elif condition == 'Negative':
-                self.go_interview = last_scp < avg_scp - sd_scp
+            # Make sure there were some trials between the first and the second interview
+            # using the "second_interview_delay" variable.
+            if n_scps < self.trials_until_first_interview + self.second_interview_delay:
+                self.go_interview = False
+            else:
+                if condition == 'Positive':
+                    self.go_interview = last_scp > avg_scp + sd_scp
+                elif condition == 'Negative':
+                    self.go_interview = last_scp < avg_scp - sd_scp
 
         if not self.go_interview:
-                    print("SCP not large enough")
+            print("SCP not large enough or too few trials to start another interview.")
 
     def get_statelist(self):
         ''' Here the number and description of states will be defined.

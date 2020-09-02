@@ -155,6 +155,7 @@ class HistMonitor:
         # Data
         self.dataMemory = np.array([np.nan] * int(round(self.scp_trial_duration*self.sr)))
         self.scpAveragesList = []
+        self.n_responses = len(self.scpAveragesList)
         # Figure
         self.fig = fig
         self.figsize = figsize
@@ -175,7 +176,8 @@ class HistMonitor:
 
         self.fig.canvas.draw()   # note that the first draw comes before setting data 
 
-        self.title = self.ax.set_title("", loc='right', fontsize=14)
+        self.title = f'Histogram of {self.n_responses} responses'
+        self.ax.set_title(self.title, fontsize=14)
 
         self.axbackground = self.fig.canvas.copy_from_bbox(self.ax.bbox)
         self.hist = self.ax.hist([-1, 0, 1])   
@@ -209,6 +211,10 @@ class HistMonitor:
         # Correct baseline
         tmpSCP -= np.mean(tmpSCP[0:int(self.scp_baseline_duration*self.sr)])
         self.scpAveragesList.append(np.mean(tmpSCP))
+        
+        self.n_responses = len(self.scpAveragesList)
+        self.title = f'Histogram of {self.n_responses} responses'
+        self.ax.set_title(self.title, fontsize=14)
 
     def plot_hist(self):
         ''' Plot histogram of SCP averages if there are enough of them.'''
@@ -255,4 +261,4 @@ class Textbox:
         ax.yaxis.set_visible(False)
 
         # ax = self.fig.add_axes([0.1, 0.05, 0.2, 0.1])
-        self.statusBox = ax.text(0.05, 0.75, "Status", fontsize=16)
+        self.statusBox = ax.text(0.05, 0.75, "Status", fontsize=12, wrap=True, ha='left')
