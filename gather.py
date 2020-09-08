@@ -48,9 +48,12 @@ class Gather:
         # Perform main loop until parameters like sr are there.
         while self.blockSize is None or self.sr is None:
             self.main()
+        # loop = asyncio.new_event_loop()
+        # asyncio.set_event_loop(loop)
+        # result = loop.run_until_complete(self.main(initial_run=True))
+        # loop.stop()
+        # loop.close()
 
-        
-        
         self.fresh_init()
         print("initialized Gather instance")
 
@@ -65,7 +68,10 @@ class Gather:
     
 
 
-    def main(self):
+    def main(self, initial_run=False):
+
+        
+        print('receive data')
         # Get message header as raw array of chars
         self.rawhdr = self.RecvData(24)
 
@@ -124,13 +130,10 @@ class Gather:
             self.quit()
 
         
-
-        
-
-
     # Helper function for receiving whole message
     def RecvData(self, requestedSize):
         returnStream = bytearray()#''
+
         while len(returnStream) < requestedSize:
             databytes = self.con.recv(requestedSize - len(returnStream))
 

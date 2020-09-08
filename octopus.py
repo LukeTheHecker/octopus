@@ -10,6 +10,7 @@ import numpy as np
 import os
 import json
 import random
+import asyncio
 
 class Octopus:
     def __init__(self, figsize=(13, 6), update_frequency=10, scp_trial_duration=2.5, 
@@ -40,6 +41,8 @@ class Octopus:
         self.responded = False
         self.get_statelist()
         self.second_interview_delay = second_interview_delay
+        self.communicate_quit_code = 2
+        self.quit = False
 
         # Objects 
         self.callbacks = Callbacks()
@@ -48,6 +51,8 @@ class Octopus:
 
         # Figure
         self.fig = plt.figure(num=42, figsize=figsize)
+        # plt.ion()
+        # plt.show(block=False)
         self.fig.tight_layout(pad=2)
         self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, fig=self.fig, update_frequency=self.update_frequency)
         self.hist_monitor = HistMonitor(self.gatherer.sr, fig=self.fig, 
@@ -57,106 +62,163 @@ class Octopus:
         # Conditions
         self.read_blinded_conditions()
 
-    def check_response(self):
+        # Async stuff
+        # self.loop = None
+    
+        
+    
+    async def run(self):
+        ''' Join tasks together in an asynchronous manner: Data gathering, 
+        data monitoring, event handling.
+        '''
+        print("into the run")
+        await asyncio.sleep(1)
+        self.gatherer.fresh_init()
+
+        tsk_gather = self.loop.create_task(self.gather_data())
+
+        tsk_DMupdate = self.loop.create_task(self.update_data_monitor())
+
+        tsk_checkState = self.loop.create_task(self.checkState())
+        tsk_checkResponse = self.loop.create_task(self.check_response())
+        tsk_communicateState = self.loop.create_task(self.communicate_state())
+        tsk_checkUI = self.loop.create_task(self.checkUI())
+        print('into the .wait:')
+        await asyncio.wait([tsk_gather, tsk_DMupdate, tsk_checkState, tsk_checkResponse, 
+            tsk_communicateState, tsk_checkUI])
+        print('out of the .wait:')
+        # self.gatherer.quit()
+        # self.loop.stop()
+        # self.loop.close()
+
+    def main(self):
+        self.loop = asyncio.new_event_loop()
+        self.loop.run_until_complete(self.run())
+        
+        self.loop.close()
+
+    async def gather_data(self, call_freq=1000):
+        
+        break_cond = (self.gatherer.con.fileno() != -1)
+
+        while break_cond:
+            if call_freq is not None:
+                await asyncio.sleep(1 / call_freq)
+            self.gatherer.main()
+            break_cond = (self.gatherer.con.fileno() != -1)
+
+
+    async def update_data_monitor(self, call_freq=20):
+        while True:
+            if call_freq is not None:
+                await asyncio.sleep(1 / call_freq)
+                self.data_monitor.update(self.gatherer)
+
+
+    async def check_response(self, call_freq=5):
         ''' Receive response from participant through internal TCP connection with the 
             libet presentation
         '''
         # if n_new_blocks * self.block_duration < 1 / self.update_frequency:
-        # self.gatherer.block_counter 
+        # self.gatherer.block_counter
+        while True:
+            if call_freq is not None:
+                await asyncio.sleep(1 / call_freq)
 
-        ready = select.select([self.internal_tcp.con], [], [], self.internal_tcp.timeout)
-        if ready[0]:
-            msg_libet = self.internal_tcp.con.recv(self.internal_tcp.BufferSize)
+            if self.internal_tcp.con.fileno() != -1:
+                msg_libet = self.read_from_socket(self.internal_tcp)
+                if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
+                    print('Response!')
+                    # self.responded = True
+                    self.hist_monitor.button_press(self.gatherer)
+                    self.hist_monitor.plot_hist()
+                    self.checkState(recent_response=True)
+            else:
+                return
 
-            if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
-                print('Response!')
-                # self.responded = True
-                self.hist_monitor.button_press()
-                self.hist_monitor.plot_hist()
-                self.checkState(recent_response=True)
-
-    def communicate_state(self):
+    async def communicate_state(self, val=None, call_freq=5):
         ''' This method communicates via the TCP Port that is connected with 
             the libet presentation.
         '''
-        # Send Current state (allow or forbid) to the libet presentation
-        allow_presentation = self.callbacks.allow_presentation
-        msg = int(allow_presentation).to_bytes(1, byteorder='big')
-        self.internal_tcp.con.send(msg)
-        # print(f'sending state {int(allow_presentation)}')
-        
-    
-    def main(self):
-        ''' Join tasks together in an asynchronous manner: Data gathering, 
-        data monitoring, event handling.
-        '''
-        self.gatherer.fresh_init()
-        
-        # Schedule some functions
-        
-        scheduled_functions = [self.checkState, self.check_response, self.communicate_state]
-        start = time.time()
-        interval = 0.1  # seconds
-        scheduler = Scheduler(scheduled_functions, start, interval)
-        
-        scheduled_functions = [self.checkUI]
-        start = time.time()
-        interval = 0.2  # seconds
-        scheduler_slow = Scheduler(scheduled_functions, start, interval)
+        while True:
+            if call_freq is not None:
+                await asyncio.sleep(1 / call_freq)
 
-        while not self.callbacks.quit:
+            if self.internal_tcp.con.fileno() == -1:
+                return
 
-            self.gatherer.main()
-            self.data_monitor.update(self.gatherer)
-            self.hist_monitor.update_data(self.gatherer.data)  # check that data isnt stored twice
+            if val is None:
+                # Send Current state (allow or forbid) to the libet presentation
+                allow_presentation = self.callbacks.allow_presentation
+                msg = int(allow_presentation).to_bytes(1, byteorder='big')
+            else:
+                msg = int(val).to_bytes(1, byteorder='big')
 
-            scheduler.run()
-            scheduler_slow.run()
+            self.internal_tcp.con.send(msg)
+            print(f'sending state {msg}')
 
-        self.gatherer.quit()
+    async def checkUI(self, call_freq=10):
+        ''' Check the current state of all buttons and perform appropriate actions.'''
+        while True:
+            if call_freq is not None:
+                await asyncio.sleep(1 / call_freq)
+            print('checking ui')
+            self.current_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
 
+            self.callbacks.stateChange = 0
+            if self.callbacks.quit == True:
+                self.current_state = 5
+            # Adjust GUI
+            self.buttons.buttonPresentationcontrol.label.set_text(self.callbacks.permission_statement[self.callbacks.allow_presentation])
 
-    def checkUI(self):
-        self.current_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
-
-        self.callbacks.stateChange = 0
-        if self.callbacks.quit == True:
-            self.current_state = 5
-        # Adjust GUI
-        self.buttons.buttonPresentationcontrol.label.set_text(self.callbacks.permission_statement[self.callbacks.allow_presentation])
-
-    def checkState(self, recent_response=False):
+    async def checkState(self, recent_response=False, call_freq=10):
         ''' This method specifies the current state of the experiment.
             States are listed in get_statelist().
         '''
-        if recent_response and (self.current_state == 1 or self.current_state == 3):
-            self.check_if_interview()
-            if self.go_interview:
+        while True:
+            if call_freq is not None:
+                await asyncio.sleep(1 / call_freq)
+
+            if recent_response and (self.current_state == 1 or self.current_state == 3):
+                self.check_if_interview()
+                if self.go_interview:
+                    self.current_state += 1
+                    self.callbacks.presentToggle(None)
+                    
+            if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histcrit:
+                self.current_state = 1
+                self.hist_monitor.current_state = self.current_state
+                # self.textbox.statusBox.set_text(f"State={self.current_state}")
+            
+            if (self.current_state == 2 or self.current_state == 4) and self.callbacks.allow_presentation:
+                # Interview must be over
+                print("Interview is over, lets continue!")
                 self.current_state += 1
-                self.callbacks.presentToggle(None)
+
+            if self.current_state == 5 or self.callbacks.quit == True:
+                # Save experiment
+                #...
+                # Send message to libet presentation that the experiment is over
+                self.internal_tcp.con.setblocking(0)
+                self.communicate_state(val=self.communicate_quit_code)
+
+                response = self.read_from_socket(self.internal_tcp)
                 
-
-
-        if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histcrit:
-            self.current_state = 1
-            self.hist_monitor.current_state = self.current_state
-            # self.textbox.statusBox.set_text(f"State={self.current_state}")
         
-        if (self.current_state == 2 or self.current_state == 4) and self.callbacks.allow_presentation:
-            # Interview must be over
-            print("Interview is over, lets continue!")
-            self.current_state += 1
+                while int.from_bytes(response, "big") != self.communicate_quit_code**2:
+                    self.communicate_state(val=self.communicate_quit_code)
+                    response = self.read_from_socket(self.internal_tcp)
+                    time.sleep(0.2)
+                print(f'Recieved response: {response}')
+                # Quit experiment
+                print("Quitting...")
+                self.quit = True
+                self.gatherer.quit()
+                self.internal_tcp.quit()
+                print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
 
-        if self.current_state == 5 or self.callbacks.quit == True:
-            # Save experiment
-            #...
-            # Quit experiment
-            print("Quitting...")
-            self.gatherer.quit()
-            self.internal_tcp.quit()
-
-        self.textbox.statusBox.set_text(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
-    
+            self.textbox.statusBox.set_text(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
+        
     def check_if_interview(self):
         
         n_scps = len(self.hist_monitor.scpAveragesList)
@@ -233,7 +295,17 @@ class Octopus:
         self.cond_order = [key for key in self.conds.keys()]
         random.shuffle(self.cond_order)
 
+    def read_from_socket(self, socket):
+        if socket.con.fileno() == -1:
+            return
 
+        ready = select.select([socket.con], [], [], socket.timeout)
+        response = b''
+        if ready[0]:
+            response = socket.con.recv(socket.BufferSize)
 
-octopus = Octopus()
-octopus.main()
+        return response
+
+if __name__ == '__main__':
+    octopus = Octopus()
+    octopus.main()

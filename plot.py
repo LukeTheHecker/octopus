@@ -9,7 +9,7 @@ import seaborn as sns
 
 class DataMonitor:
    
-    def __init__(self, sr, block_size, fig=None, window_len_s=10, figsize=(13,6), ylim=(-100, 100), update_frequency=10):
+    def __init__(self, sr, block_size, fig=None, window_len_s=10, figsize=(13,6), ylim=(-100, 100), update_frequency=5):
         print('DataMonitor initialized')
         # Basic Settings
         self.sr = sr
@@ -68,15 +68,19 @@ class DataMonitor:
         IncomingBlockMemory = gatherer.blockMemory
         lagtime = gatherer.lag_s
 
-        if np.max(IncomingBlockMemory) <= np.max(self.blockMemory):
-            # all blocks have been plotted
-            return
+        
 
         n_new_blocks = int(np.max(IncomingBlockMemory) - np.max(self.blockMemory))
         
-        if n_new_blocks * self.block_duration < 1 / self.update_frequency:
+
+        if np.max(IncomingBlockMemory) <= np.max(self.blockMemory):
+            # all blocks have been plotted
+            print('all blocks have been plotted')
             return
 
+        # await asyncio.sleep(0.0001)
+
+        print('plot data')
         new_blocks = np.arange(np.max(self.blockMemory) + 1, np.max(self.blockMemory) + 1 + n_new_blocks).astype(int)
         # print(f'new_blocks={new_blocks}')
         # Block count of the first block that is new
@@ -132,7 +136,7 @@ class DataMonitor:
             self.title.set_text("Lag = {:.2f} s".format(lagtime))
             plt.draw()
         
-
+        # plt.pause(0.005)
         self.fig.canvas.restore_region(self.axbackground)
         self.ax.draw_artist(self.line)
         self.fig.canvas.blit(self.ax.bbox)
@@ -187,29 +191,16 @@ class HistMonitor:
         
         plt.show(block=False)
         
-    def update_data(self, data_package):
-        ''' Collect new data and add it to the data memory.
-        Parameters:
-        -----------
-        data_package : numpy.ndarray/list, new data retrieved from rda.
-        '''
-        if self.package_size is None:
-            self.package_size = len(data_package)
-
-        assert self.package_size == len(data_package), "package_size is supposed to be {} but data was of size {}".format(self.package_size, len(data_package))
-
-        tmpDataMemory = np.zeros((len(self.dataMemory)))
-        tmpDataMemory[0:-self.package_size] = self.dataMemory[self.package_size:]
-        tmpDataMemory[-self.package_size:] = data_package
-        self.dataMemory = tmpDataMemory
-
-    
-    def button_press(self):
+        
+    def button_press(self, gatherer):
         ''' If a button was pressed append the average baseline corrected SCP to a list.
         '''
-        tmpSCP = self.dataMemory.copy()
-        # Correct baseline
+        # Get data from gatherer:
+        back_idx = self.scp_trial_duration * self.sr
+        tmpSCP = gatherer.dataMemory[-back_idx:]
+        # Correct Baseline:
         tmpSCP -= np.mean(tmpSCP[0:int(self.scp_baseline_duration*self.sr)])
+        # Save average
         self.scpAveragesList.append(np.mean(tmpSCP))
         
         self.n_responses = len(self.scpAveragesList)
@@ -255,11 +246,6 @@ class Buttons:
         ax = self.fig.add_axes([0.7, 0.30, 0.05, 0.075])
         self.buttonbackwards = Button(ax, '<-')
         self.buttonbackwards.on_clicked(self.callbacks.statebackwards)
-
-
-
-
-
 
 class Textbox:
     def __init__(self, fig):
