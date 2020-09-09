@@ -29,7 +29,7 @@ class Gather:
         # Data handling
         self.blocks_per_s = 50
         self.block_counter = 0
-        self.dataMemoryDurS = 5  # seconds of data memory
+        self.dataMemoryDurS = 11  # seconds of data memory
         self.block_dur_s = 1.0/self.blocks_per_s
         self.blockSize = None
         self.sr = None
@@ -46,13 +46,13 @@ class Gather:
         
 
         # Perform main loop until parameters like sr are there.
-        while self.blockSize is None or self.sr is None:
-            self.main()
-        # loop = asyncio.new_event_loop()
-        # asyncio.set_event_loop(loop)
-        # result = loop.run_until_complete(self.main(initial_run=True))
-        # loop.stop()
-        # loop.close()
+        # while self.blockSize is None or self.sr is None:
+        #     self.main()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(self.main(initial_run=True))
+        loop.stop()
+        loop.close()
 
         self.fresh_init()
         print("initialized Gather instance")
@@ -64,15 +64,15 @@ class Gather:
             self.dataMemory = np.array([np.nan]*int(self.dataMemorySize))  # nan array to store data in
         except:
             pass
-        self.startTime = time.time()
+        # self.startTime = time.time()
     
 
 
-    def main(self, initial_run=False):
-
-        
-        print('receive data')
+    async def main(self, initial_run=False, call_freq=1000):
+        # print('receive data')
         # Get message header as raw array of chars
+        await asyncio.sleep(1 / call_freq)
+        print("starting data gathering")
         self.rawhdr = self.RecvData(24)
 
         # Split array into usefull information id1 to id4 are constants
@@ -105,9 +105,6 @@ class Gather:
             self.data = np.array([np.nan] * int(self.blockSize))
 
         elif msgtype == 4:
-
-            if self.block_counter == 0:
-                self.startTime = time.time()
 
             # Data message, extract data and markers
             self.GetData()
@@ -186,6 +183,7 @@ class Gather:
 
         if self.first_block_ever is None:
             self.first_block_ever = self.block
+            self.startTime = time.time()
 
         # Extract eeg data as array of floats
         self.old_data = self.data.copy()

@@ -55,7 +55,7 @@ class DataMonitor:
         plt.show(block=False)
 
 
-    def update(self, gatherer):
+    async def update(self, gatherer, call_freq):
         ''' This method takes a data_package and plots it at the appropriate position in the data monitor plot
         Parameters:
         -----------
@@ -64,6 +64,8 @@ class DataMonitor:
         Return:
         -------
         '''
+        await asyncio.sleep(1 / call_freq)
+
         dataMemory = gatherer.dataMemory
         IncomingBlockMemory = gatherer.blockMemory
         lagtime = gatherer.lag_s
@@ -73,14 +75,14 @@ class DataMonitor:
         n_new_blocks = int(np.max(IncomingBlockMemory) - np.max(self.blockMemory))
         
 
-        if np.max(IncomingBlockMemory) <= np.max(self.blockMemory):
+        if np.max(IncomingBlockMemory) == np.max(self.blockMemory):
             # all blocks have been plotted
             print('all blocks have been plotted')
             return
 
         # await asyncio.sleep(0.0001)
 
-        print('plot data')
+        # print('plot data')
         new_blocks = np.arange(np.max(self.blockMemory) + 1, np.max(self.blockMemory) + 1 + n_new_blocks).astype(int)
         # print(f'new_blocks={new_blocks}')
         # Block count of the first block that is new
