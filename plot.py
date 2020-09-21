@@ -198,7 +198,7 @@ class HistMonitor:
         ''' If a button was pressed append the average baseline corrected SCP to a list.
         '''
         # Get data from gatherer:
-        back_idx = self.scp_trial_duration * self.sr
+        back_idx = int(self.scp_trial_duration * self.sr)
         tmpSCP = gatherer.dataMemory[-back_idx:]
         # Correct Baseline:
         tmpSCP -= np.mean(tmpSCP[0:int(self.scp_baseline_duration*self.sr)])

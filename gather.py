@@ -72,7 +72,7 @@ class Gather:
         # print('receive data')
         # Get message header as raw array of chars
         await asyncio.sleep(1 / call_freq)
-        print("starting data gathering")
+        #print("starting data gathering")
         self.rawhdr = self.RecvData(24)
 
         # Split array into usefull information id1 to id4 are constants

@@ -44,8 +44,7 @@ class Octopus:
         self.communicate_quit_code = 2
         self.quit = False
 
-        self.startDialogue()
-         
+        self.startDialogue()         
 
         # Objects 
         self.callbacks = Callbacks()
@@ -65,8 +64,8 @@ class Octopus:
         # Conditions
         self.read_blinded_conditions()
 
-        # Async stuff
-        # self.loop = None
+        # Load state if needed:
+        self.load()
     
     def startDialogue(self):
         self.SubjectID = input("Enter ID: ") 
@@ -87,9 +86,10 @@ class Octopus:
         tsk_checkResponse = self.loop.create_task(self.check_response())
         tsk_communicateState = self.loop.create_task(self.communicate_state())
         tsk_checkUI = self.loop.create_task(self.checkUI())
+        tsk_save = self.loop.create_task(self.save())
         # print('into the .wait:')
         await asyncio.wait([tsk_gather, tsk_DMupdate, tsk_checkState, tsk_checkResponse, 
-            tsk_communicateState, tsk_checkUI])
+            tsk_communicateState, tsk_checkUI, tsk_save])
         
         # print('out of the .wait:')
         # self.gatherer.quit()
@@ -106,14 +106,14 @@ class Octopus:
         
         break_cond = (self.gatherer.con.fileno() != -1)
 
-        while True:
+        while not self.quit:
             # print("starting data gathering")
             await self.gatherer.main(call_freq=call_freq)
-            print("done with data gathering")
+            #print("done with data gathering")
             # break_cond = (self.gatherer.con.fileno() != -1)
 
     async def update_data_monitor(self, call_freq=20):
-        while True:
+        while not self.quit:
             if call_freq is not None:
                 await self.data_monitor.update(self.gatherer, call_freq)
 
@@ -123,7 +123,7 @@ class Octopus:
         '''
         # if n_new_blocks * self.block_duration < 1 / self.update_frequency:
         # self.gatherer.block_counter
-        while True:
+        while not self.quit:
             if call_freq is not None:
                 await asyncio.sleep(1 / call_freq)
                 # print('checking response')
@@ -133,9 +133,13 @@ class Octopus:
                 if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
                     print('Response!')
                     # self.responded = True
+                    print("1")
                     self.hist_monitor.button_press(self.gatherer)
+                    print("2")
                     self.hist_monitor.plot_hist()
+                    print("3")
                     self.checkState(recent_response=True)
+                    print("4")
             else:
                 return
 
@@ -143,7 +147,7 @@ class Octopus:
         ''' This method communicates via the TCP Port that is connected with 
             the libet presentation.
         '''
-        while True:
+        while not self.quit:
             if call_freq is not None:
                 await asyncio.sleep(1 / call_freq)
 
@@ -154,10 +158,13 @@ class Octopus:
                 # Send Current state (allow or forbid) to the libet presentation
                 allow_presentation = self.callbacks.allow_presentation
                 msg = int(allow_presentation).to_bytes(1, byteorder='big')
+                self.internal_tcp.con.send(msg)
             else:
                 msg = int(val).to_bytes(1, byteorder='big')
+                self.internal_tcp.con.send(msg)
+                break
 
-            self.internal_tcp.con.send(msg)
+            
             # print(f'sending state {msg}')
 
     async def checkUI(self, call_freq=10):
@@ -167,6 +174,9 @@ class Octopus:
                 await asyncio.sleep(1 / call_freq)
             # print('checking ui')
             self.current_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
+            if self.callbacks.stateChange != 0:
+                print("allow_presentation = False now")
+                self.callbacks.allow_presentation = False
 
             self.callbacks.stateChange = 0
             if self.callbacks.quit == True:
@@ -178,7 +188,7 @@ class Octopus:
         ''' This method specifies the current state of the experiment.
             States are listed in get_statelist().
         '''
-        while True:
+        while not self.quit:
             if call_freq is not None:
                 await asyncio.sleep(1 / call_freq)
             # print('Checking state')
@@ -204,13 +214,13 @@ class Octopus:
                 #...
                 # Send message to libet presentation that the experiment is over
                 self.internal_tcp.con.setblocking(0)
-                self.communicate_state(val=self.communicate_quit_code)
+                await self.communicate_state(val=self.communicate_quit_code)
 
                 response = self.read_from_socket(self.internal_tcp)
                 
         
                 while int.from_bytes(response, "big") != self.communicate_quit_code**2:
-                    self.communicate_state(val=self.communicate_quit_code)
+                    await self.communicate_state(val=self.communicate_quit_code)
                     response = self.read_from_socket(self.internal_tcp)
                     asyncio.sleep(0.2)
                 print(f'Recieved response: {response}')
@@ -219,6 +229,11 @@ class Octopus:
                 self.quit = True
                 self.gatherer.quit()
                 self.internal_tcp.quit()
+                self.save()
+                self.loop.stop()
+                self.loop.close()
+                
+
                 print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
 
             self.textbox.statusBox.set_text(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
@@ -310,12 +325,48 @@ class Octopus:
 
         return response
 
-    def save(self):
+    async def save(self, call_freq = 1):
         ''' Save the current state of the experiment. 
         (not finished)
         '''
-        return
-        State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 'current_state':self.current_state, 'SubjectID': self.SubjectID }
+        while True:
+            if call_freq is not None:
+                
+                await asyncio.sleep(1 / call_freq)
+
+            
+            State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 'current_state':int(self.current_state), 'SubjectID': self.SubjectID }
+
+            json_file = json.dumps(State)
+            filename = "states/" + self.SubjectID + '.json'
+            with open(filename, 'w') as f:
+                json.dump(json_file, f)
+            
+    def load(self):
+
+        filename = "states/" + self.SubjectID + '.json'
+        if not os.path.isfile(filename):
+            print("No state found!")
+            # self.save()
+
+        else:
+            answer = input(f"ID {self.SubjectID} already exists. Load data? [Y/N] ")
+            if answer == "Y":
+                with open(filename, 'r') as f:
+                    json_file_read = json.load(f)
+                
+                State = json.loads(json_file_read)
+
+                self.hist_monitor.scpAveragesList = State['scpAveragesList']
+                self.current_state = State['current_state']
+                self.SubjectID = State['SubjectID']
+
+
+            elif answer == "N":
+                self.save()
+
+            else:
+                self.load()
 
 
 if __name__ == '__main__':
