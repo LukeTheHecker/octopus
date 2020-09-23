@@ -329,15 +329,19 @@ class Octopus:
         ''' Save the current state of the experiment. 
         (not finished)
         '''
+        if not os.path.isdir('states/'):
+            # If there is no folder to store states in -> create it
+            os.mkdir('states/')
+
         while True:
             if call_freq is not None:
-                
                 await asyncio.sleep(1 / call_freq)
 
             
             State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 'current_state':int(self.current_state), 'SubjectID': self.SubjectID }
 
             json_file = json.dumps(State)
+
             filename = "states/" + self.SubjectID + '.json'
             with open(filename, 'w') as f:
                 json.dump(json_file, f)

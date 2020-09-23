@@ -1,4 +1,5 @@
 *.pyc
 *.pkl
 *.ipynb
-/states
+states/*
+_*_.py

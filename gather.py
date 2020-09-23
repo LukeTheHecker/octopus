@@ -7,13 +7,16 @@ import time
 from plot import DataMonitor, HistMonitor, Buttons
 import matplotlib.pyplot as plt
 from util import *
+from gui import gui_retry_cancel
 import asyncio
-from socket import *
 import sys
 from tcp import CustomSocket
 
+from PyQt5.QtWidgets import QMessageBox
+
 class Gather:
-    def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response'):
+    def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
+        sockettimeout=1):
         ''' 
         Parameters:
         -----------
@@ -41,8 +44,11 @@ class Gather:
         self.first_block_ever = None
 
         # Data TCP Connection (with PC that sends RDA)
-        self.con = socket(AF_INET, SOCK_STREAM)
-        self.con.connect((ip, port))
+        self.ip = ip
+        self.port = port
+        self.sockettimeout = sockettimeout
+        self.retryConnect()
+        
         
 
         # Perform main loop until parameters like sr are there.
@@ -66,7 +72,15 @@ class Gather:
             pass
         # self.startTime = time.time()
     
+    def retryConnect(self):
+        print('Attempting connection to Brain Vision Remote Data Access...')
+        self.con = socket(AF_INET, SOCK_STREAM)
+        # self.con.settimeout(self.sockettimeout)
 
+        try:
+            self.con.connect((self.ip, self.port))    
+        except TimeoutError:
+            gui_retry_cancel(self.retryConnect)
 
     async def main(self, initial_run=False, call_freq=1000):
         # print('receive data')
@@ -125,8 +139,7 @@ class Gather:
             # Stop message, terminate program
             print("Stop")
             self.quit()
-
-        
+   
     # Helper function for receiving whole message
     def RecvData(self, requestedSize):
         returnStream = bytearray()#''
@@ -233,6 +246,7 @@ class Gather:
 
     def quit(self):
         self.con.close()
+
 
 class Marker:
     def __init__(self):
