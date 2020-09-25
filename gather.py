@@ -1,18 +1,11 @@
-from callbacks import Callbacks
 from socket import *
-import select
 from struct import *
 import numpy as np
 import time
-from plot import DataMonitor, HistMonitor, Buttons
-import matplotlib.pyplot as plt
 from util import *
 from gui import gui_retry_cancel
 import asyncio
-import sys
-from tcp import CustomSocket
 
-from PyQt5.QtWidgets import QMessageBox
 
 class Gather:
     def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
@@ -52,15 +45,11 @@ class Gather:
         
 
         # Perform main loop until parameters like sr are there.
-        # while self.blockSize is None or self.sr is None:
-        #     self.main()
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(self.main(initial_run=True))
-        loop.stop()
-        loop.close()
+        while self.blockSize is None or self.sr is None:
+            self.main()
+   
 
-        self.fresh_init()
+        # self.fresh_init()
         print("initialized Gather instance")
 
     def fresh_init(self):
@@ -70,6 +59,8 @@ class Gather:
             self.dataMemory = np.array([np.nan]*int(self.dataMemorySize))  # nan array to store data in
         except:
             pass
+        self.con.close()
+        self.retryConnect()
         # self.startTime = time.time()
     
     def retryConnect(self):
@@ -82,10 +73,9 @@ class Gather:
         except TimeoutError:
             gui_retry_cancel(self.retryConnect)
 
-    async def main(self, initial_run=False, call_freq=1000):
+    def main(self):
         # print('receive data')
         # Get message header as raw array of chars
-        await asyncio.sleep(1 / call_freq)
         #print("starting data gathering")
         self.rawhdr = self.RecvData(24)
 

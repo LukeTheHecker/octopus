@@ -8,16 +8,17 @@ class Callbacks:
         self.quit = False
         self.stateChange = 0
 
-    def presentToggle(self, event):
+    def presentToggle(self):
         self.allow_presentation = not self.allow_presentation
 
-    def quitexperiment(self, event):
+    def quitexperiment(self):
+        print("pressed")
         self.quit=True
 
-    def stateforward(self, event):
+    def stateforward(self):
         self.stateChange = 1
         
-    def statebackwards(self, event):
+    def statebackwards(self):
         self.stateChange = -1
 
 
