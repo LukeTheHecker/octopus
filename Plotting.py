@@ -24,6 +24,10 @@ win = pg.GraphicsLayoutWidget(show=True, title="Basic plotting examples") # dies
 # Enable antialiasing for prettier plots
 # pg.setConfigOptions(antialias=True)
 
+def hardCalc():
+    for i in range(1, 10000):
+        for j in range(1, 1000):
+            j % i
 
 p6 = win.addPlot(title="Updating plot")
 curve = p6.plot(pen='r')
@@ -52,6 +56,7 @@ ptr7 = 0
 def update2():
     print("i")
     global curve7, data7, ptr7, p7
+    hardCalc()
     curve7.setData(data[ptr7%10, :])
     if ptr7 == 0:
         p7.enableAutoRange('xy', False)  ## stop auto-scaling after the first data set is plotted
