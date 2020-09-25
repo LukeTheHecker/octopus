@@ -1,55 +1,40 @@
-from plot import Buttons
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Button
+import sys
+import matplotlib
+matplotlib.use('Qt5Agg')
 
-#------------------------------------------------#
-# Create TCP Server
-from socket import *
- 
-TCP_IP = '192.168.2.128'  # '127.0.0.1'
-TCP_PORT = 5005
-BUFFER_SIZE = 1024
-MESSAGE = "Hello, World!"
+from PyQt5 import QtCore, QtWidgets
 
-s = socket(AF_INET, SOCK_STREAM)
-print("socket created")
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+import seaborn as sns
+import numpy as np
 
-s.bind((TCP_IP, TCP_PORT))
-print("binded")
+class MplCanvas(FigureCanvasQTAgg):
 
-s.listen(1)
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+        super(MplCanvas, self).__init__(fig)
 
-conn, addr = s.accept()
-print('Connection address:', addr)
-#------------------------------------------------#
-myVar = True
 
-def toggle(event):
-    global myVar
-    global buttonHandle
-    global button_text
-    myVar = not myVar
-    buttonHandle.label.set_text(button_text[int(myVar)])
-    # print(f'myVar={myVar}')
+class MainWindow(QtWidgets.QMainWindow):
 
-button_text = ['Toggle: Off', 'Toggle: On']
+    def __init__(self, *args, **kwargs):
+        super(MainWindow, self).__init__(*args, **kwargs)
 
-plt.ion()
-fig = plt.figure(num=10)
-ax = fig.add_axes([0.5, 0.5, 0.1, 0.075])
-buttonHandle = Button(ax, button_text[int(myVar)])
-buttonHandle.on_clicked(toggle)
-plt.show(block=False)
-print("into while loop")
+        # Create the maptlotlib FigureCanvas object, 
+        # which defines a single set of axes as self.axes.
+        sc = MplCanvas(self, width=5, height=4, dpi=100)
 
-lastMyVar = myVar
+        self.scpAveragesList = np.random.randn(100)
+        sns.distplot(self.scpAveragesList, ax=sc.axes)
+        
+        # sc.axes.plot([0,1,2,3,4], [10,1,20,3,40])
+        self.setCentralWidget(sc)
 
-while True:
-    # if myVar != lastMyVar:
-    #     lastMyVar = myVar
-    #     # print(f'myVar={myVar}')
-    msg = int(myVar).to_bytes(1, byteorder='big')
-    #     # Send via TCP
-    conn.send(msg)
+        self.show()
 
-    plt.pause(0.5)
+
+app = QtWidgets.QApplication(sys.argv)
+w = MainWindow()
+app.exec_()

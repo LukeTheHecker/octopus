@@ -1,8 +1,12 @@
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+import pyqtgraph as pg
+from plot import MplCanvas
 import matplotlib.pyplot as plt
 from callbacks import Callbacks
 from gather import Gather
 from plot import DataMonitor, HistMonitor, Buttons, Textbox
-from util import Scheduler
 from communication import TCP
 import select
 import time
@@ -10,9 +14,9 @@ import numpy as np
 import os
 import json
 import random
-import asyncio
+from myWorker import Worker
 
-class Octopus:
+class Octopus(QMainWindow):
     def __init__(self, figsize=(13, 6), update_frequency=10, scp_trial_duration=2.5, 
         scp_baseline_duration=0.25, histcrit=5, targetMarker='response', 
         second_interview_delay=5):
@@ -30,7 +34,19 @@ class Octopus:
         histcrit : int, minimum number of SCPs that are required before plotting a 
             histogram of their average values
         '''
-        # Plot parameters
+        super(Octopus, self).__init__()
+
+        # User input:
+        self.startDialogue()
+        # Objects 
+        self.callbacks = Callbacks()
+        self.gatherer = Gather()
+        self.internal_tcp = TCP()
+        self.gatherer.fresh_init()
+        self.set_layout()
+        
+
+        # # Plot parameters
         self.scp_trial_duration=scp_trial_duration
         self.scp_baseline_duration=scp_baseline_duration
         self.histcrit=histcrit
@@ -44,199 +60,218 @@ class Octopus:
         self.communicate_quit_code = 2
         self.quit = False
 
-        self.startDialogue()         
+              
 
-        # Objects 
-        self.callbacks = Callbacks()
-        self.gatherer = Gather()
-        self.internal_tcp = TCP()
-
-        # Figure
-        self.fig = plt.figure(num=42, figsize=figsize)
-        # plt.ion()
-        # plt.show(block=False)
-        self.fig.tight_layout(pad=2)
-        self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, fig=self.fig, update_frequency=self.update_frequency)
-        self.hist_monitor = HistMonitor(self.gatherer.sr, fig=self.fig, 
-            scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit, figsize=figsize)
-        self.buttons = Buttons(self.fig, self.callbacks)
-        self.textbox = Textbox(self.fig)
-        # Conditions
-        self.read_blinded_conditions()
-
-        # Load state if needed:
+        # Data Monitors
+        self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
+            curve=self.curve1, widget=self.graphWidget1, update_frequency=self.update_frequency,
+            title=self.title)
+        
+        self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
+            scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit)
         self.load()
+
+        # Threading:
+        self.worker_gatherer = Worker(self.gather_data)
+        self.worker_datamonitor = Worker(self.update_data_monitor)
+        self.worker_communication = Worker(self.communication_routines)
+        self.worker_GUI_routines = Worker(self.GUI_routines)
+
+        self.threadpool = QThreadPool()
+        self.threadpool.start(self.worker_gatherer)
+        self.threadpool.start(self.worker_datamonitor)
+        self.threadpool.start(self.worker_communication)
+        self.threadpool.start(self.worker_GUI_routines)
+
+        print("done")
+        # self.hist_monitor = HistMonitor(self.gatherer.sr, fig=self.fig, 
+        #     scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit, figsize=figsize)
+
+        # self.buttons = Buttons(self.fig, self.callbacks)
+        # self.textbox = Textbox(self.fig)
+        # # Conditions
+        # self.read_blinded_conditions()
+
+        # # Load state if needed:
+        # 
+
+        # List of functions to create threads for:
+        # self.gatherer.fresh_init()
+
+        # Gather Thread:
+        # self.gather_data()
+
+        ## Plot Thread:
+        # self.update_data_monitor()
+
+        # Routine Thread:
+        # self.checkState()
+        # self.check_response()
+        # self.communicate_state()
+        # self.checkUI()
+        # self.save()
     
+    def set_layout(self):
+        # Layout stuff
+        # self.setGeometry(300, 300, 250, 150)
+        # Main Widget
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
+        # Left Graph
+        self.graphWidget1 = pg.PlotWidget()
+        self.curve1 = self.graphWidget1.plot(pen="r")
+        # Title
+        self.title = QLabel()
+        self.title.setText("LOL")
+        # Bottom Graph
+        self.MplCanvas = MplCanvas(self, width=5, height=4, dpi=100)
+        # Add label
+        self.textBox = QLabel()
+        self.textBox.setText("Hello world")
+        # Add buttons
+        self.buttonPresentationcontrol = QPushButton("Allow")
+        self.buttonPresentationcontrol.pressed.connect(self.callbacks.presentToggle)
+        self.buttonQuit = QPushButton("Quit")
+        self.buttonQuit.pressed.connect(self.callbacks.quitexperiment)
+
+        self.buttonforward = QPushButton("->")
+        self.buttonforward.pressed.connect(self.callbacks.stateforward)
+
+        self.buttonbackwards = QPushButton("<-")
+        self.buttonbackwards.pressed.connect(self.callbacks.statebackwards)
+        
+        # Layout
+        self.layout = QGridLayout()
+        self.layout.addWidget(self.graphWidget1, 1,0, 2, 4)
+        self.layout.addWidget(self.title, 0,0, 1, 1)
+        self.layout.addWidget(self.MplCanvas, 3,0, 2, 4)
+        self.layout.addWidget(self.textBox, 1, 4, 2,4)
+        self.layout.addWidget(self.buttonPresentationcontrol, 2, 5, 1, 2)
+        self.layout.addWidget(self.buttonQuit, 3, 7, 1, 1)
+        self.layout.addWidget(self.buttonforward, 3, 6, 1, 1)
+        self.layout.addWidget(self.buttonbackwards, 3, 5, 1, 1)
+
+  
+
+        self.mainWidget.setLayout(self.layout)
+
     def startDialogue(self):
         self.SubjectID = input("Enter ID: ") 
     
-    async def run(self):
-        ''' Join tasks together in an asynchronous manner: Data gathering, 
-        data monitoring, event handling.
-        '''
-        print("into the run")
-        await asyncio.sleep(1)
-        self.gatherer.fresh_init()
-
-        tsk_gather = self.loop.create_task(self.gather_data())
-
-        tsk_DMupdate = self.loop.create_task(self.update_data_monitor())
-
-        tsk_checkState = self.loop.create_task(self.checkState())
-        tsk_checkResponse = self.loop.create_task(self.check_response())
-        tsk_communicateState = self.loop.create_task(self.communicate_state())
-        tsk_checkUI = self.loop.create_task(self.checkUI())
-        tsk_save = self.loop.create_task(self.save())
-        # print('into the .wait:')
-        await asyncio.wait([tsk_gather, tsk_DMupdate, tsk_checkState, tsk_checkResponse, 
-            tsk_communicateState, tsk_checkUI, tsk_save])
-        
-        # print('out of the .wait:')
-        # self.gatherer.quit()
-        # self.loop.stop()
-        # self.loop.close()
-
-    def main(self):
-        self.loop = asyncio.new_event_loop()
-        self.loop.run_until_complete(self.run())
-        
-        self.loop.close()
-
-    async def gather_data(self, call_freq=10000000000):
-        
-        break_cond = (self.gatherer.con.fileno() != -1)
-
+    def gather_data(self):
         while not self.quit:
+            # print("go")
             # print("starting data gathering")
-            await self.gatherer.main(call_freq=call_freq)
+            self.gatherer.main()
             #print("done with data gathering")
-            # break_cond = (self.gatherer.con.fileno() != -1)
 
-    async def update_data_monitor(self, call_freq=20):
+    def update_data_monitor(self):
         while not self.quit:
-            if call_freq is not None:
-                await self.data_monitor.update(self.gatherer, call_freq)
+            self.data_monitor.update(self.gatherer)
+            time.sleep(0.1)
 
-    async def check_response(self, call_freq=10):
+    def communication_routines(self):
+        while not self.quit:
+            self.communicate_state()
+            self.check_response()
+            self.checkState()
+
+    def GUI_routines(self):
+        while not self.quit:
+            self.checkUI()
+            self.save()
+
+    def check_response(self):
         ''' Receive response from participant through internal TCP connection with the 
             libet presentation
         '''
-        # if n_new_blocks * self.block_duration < 1 / self.update_frequency:
-        # self.gatherer.block_counter
-        while not self.quit:
-            if call_freq is not None:
-                await asyncio.sleep(1 / call_freq)
-                # print('checking response')
+        if self.internal_tcp.con.fileno() != -1:
+            msg_libet = self.read_from_socket(self.internal_tcp)
+            if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
+                print('Response!')
+                # self.responded = True
+                self.hist_monitor.button_press(self.gatherer)
+                self.hist_monitor.plot_hist()
+                self.checkState(recent_response=True)
+        else:
+            return
 
-            if self.internal_tcp.con.fileno() != -1:
-                msg_libet = self.read_from_socket(self.internal_tcp)
-                if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
-                    print('Response!')
-                    # self.responded = True
-                    print("1")
-                    self.hist_monitor.button_press(self.gatherer)
-                    print("2")
-                    self.hist_monitor.plot_hist()
-                    print("3")
-                    self.checkState(recent_response=True)
-                    print("4")
-            else:
-                return
-
-    async def communicate_state(self, val=None, call_freq=5):
+    def communicate_state(self, val=None):
         ''' This method communicates via the TCP Port that is connected with 
             the libet presentation.
         '''
-        while not self.quit:
-            if call_freq is not None:
-                await asyncio.sleep(1 / call_freq)
+        if self.internal_tcp.con.fileno() == -1:
+            return
+        if val is None:
+            # Send Current state (allow or forbid) to the libet presentation
+            allow_presentation = self.callbacks.allow_presentation
+            msg = int(allow_presentation).to_bytes(1, byteorder='big')
+            self.internal_tcp.con.send(msg)
+            print(f'sent {int(allow_presentation)} to libet PC')
+        else:
+            msg = int(val).to_bytes(1, byteorder='big')
+            self.internal_tcp.con.send(msg)
+            print(f'sent {int(val)} to libet PC')  
 
-            if self.internal_tcp.con.fileno() == -1:
-                return
-
-            if val is None:
-                # Send Current state (allow or forbid) to the libet presentation
-                allow_presentation = self.callbacks.allow_presentation
-                msg = int(allow_presentation).to_bytes(1, byteorder='big')
-                self.internal_tcp.con.send(msg)
-            else:
-                msg = int(val).to_bytes(1, byteorder='big')
-                self.internal_tcp.con.send(msg)
-                break
-
-            
-            # print(f'sending state {msg}')
-
-    async def checkUI(self, call_freq=10):
+    def checkUI(self):
         ''' Check the current state of all buttons and perform appropriate actions.'''
-        while True:
-            if call_freq is not None:
-                await asyncio.sleep(1 / call_freq)
-            # print('checking ui')
-            self.current_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
-            if self.callbacks.stateChange != 0:
-                print("allow_presentation = False now")
-                self.callbacks.allow_presentation = False
+        # print('checking ui')
+        self.current_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
+        if self.callbacks.stateChange != 0:
+            print("allow_presentation = False now")
+            self.callbacks.allow_presentation = False
 
-            self.callbacks.stateChange = 0
-            if self.callbacks.quit == True:
-                self.current_state = 5
-            # Adjust GUI
-            self.buttons.buttonPresentationcontrol.label.set_text(self.callbacks.permission_statement[self.callbacks.allow_presentation])
+        self.callbacks.stateChange = 0
+        if self.callbacks.quit == True:
+            self.current_state = 5
+        # Adjust GUI
+        self.buttonPresentationcontrol.setText(self.callbacks.permission_statement[self.callbacks.allow_presentation])
 
-    async def checkState(self, recent_response=False, call_freq=5):
+    def checkState(self, recent_response=False):
         ''' This method specifies the current state of the experiment.
             States are listed in get_statelist().
         '''
-        while not self.quit:
-            if call_freq is not None:
-                await asyncio.sleep(1 / call_freq)
-            # print('Checking state')
-
-            if recent_response and (self.current_state == 1 or self.current_state == 3):
-                self.check_if_interview()
-                if self.go_interview:
-                    self.current_state += 1
-                    self.callbacks.presentToggle(None)
-                    
-            if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histcrit:
-                self.current_state = 1
-                self.hist_monitor.current_state = self.current_state
-                # self.textbox.statusBox.set_text(f"State={self.current_state}")
-            
-            if (self.current_state == 2 or self.current_state == 4) and self.callbacks.allow_presentation:
-                # Interview must be over
-                print("Interview is over, lets continue!")
+        # print('Checking state')
+        if recent_response and (self.current_state == 1 or self.current_state == 3):
+            self.check_if_interview()
+            if self.go_interview:
                 self.current_state += 1
-
-            if self.current_state == 5 or self.callbacks.quit == True:
-                # Save experiment
-                #...
-                # Send message to libet presentation that the experiment is over
-                self.internal_tcp.con.setblocking(0)
-                await self.communicate_state(val=self.communicate_quit_code)
-
-                response = self.read_from_socket(self.internal_tcp)
+                self.callbacks.presentToggle(None)
                 
+        if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histcrit:
+            self.current_state = 1
+            self.hist_monitor.current_state = self.current_state
+            # self.textbox.statusBox.set_text(f"State={self.current_state}")
         
-                while int.from_bytes(response, "big") != self.communicate_quit_code**2:
-                    await self.communicate_state(val=self.communicate_quit_code)
-                    response = self.read_from_socket(self.internal_tcp)
-                    asyncio.sleep(0.2)
-                print(f'Recieved response: {response}')
-                # Quit experiment
-                print("Quitting...")
-                self.quit = True
-                self.gatherer.quit()
-                self.internal_tcp.quit()
-                self.save()
-                self.loop.stop()
-                self.loop.close()
-                
+        if (self.current_state == 2 or self.current_state == 4) and self.callbacks.allow_presentation:
+            # Interview must be over
+            print("Interview is over, lets continue!")
+            self.current_state += 1
 
-                print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
+        if self.current_state == 5 or self.callbacks.quit == True:
+            # Save experiment
+            #...
+            # Send message to libet presentation that the experiment is over
+            self.internal_tcp.con.setblocking(0)
+            self.communicate_state(val=self.communicate_quit_code)
 
-            self.textbox.statusBox.set_text(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
+            response = self.read_from_socket(self.internal_tcp)
+            
+    
+            while int.from_bytes(response, "big") != self.communicate_quit_code**2:
+                self.communicate_state(val=self.communicate_quit_code)
+                response = self.read_from_socket(self.internal_tcp)
+                time.sleep(0.1)
+            print(f'Recieved response: {response}')
+            # Quit experiment
+            print("Quitting...")
+            self.quit = True
+            self.gatherer.quit()
+            self.internal_tcp.quit()
+            self.close()
+            print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
+
+        self.textBox.setText(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
         
     def check_if_interview(self):
         
@@ -325,7 +360,7 @@ class Octopus:
 
         return response
 
-    async def save(self, call_freq = 1):
+    def save(self):
         ''' Save the current state of the experiment. 
         (not finished)
         '''
@@ -333,18 +368,13 @@ class Octopus:
             # If there is no folder to store states in -> create it
             os.mkdir('states/')
 
-        while True:
-            if call_freq is not None:
-                await asyncio.sleep(1 / call_freq)
+        State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 'current_state':int(self.current_state), 'SubjectID': self.SubjectID }
 
-            
-            State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 'current_state':int(self.current_state), 'SubjectID': self.SubjectID }
+        json_file = json.dumps(State)
 
-            json_file = json.dumps(State)
-
-            filename = "states/" + self.SubjectID + '.json'
-            with open(filename, 'w') as f:
-                json.dump(json_file, f)
+        filename = "states/" + self.SubjectID + '.json'
+        with open(filename, 'w') as f:
+            json.dump(json_file, f)
             
     def load(self):
 
@@ -364,8 +394,6 @@ class Octopus:
                 self.hist_monitor.scpAveragesList = State['scpAveragesList']
                 self.current_state = State['current_state']
                 self.SubjectID = State['SubjectID']
-
-
             elif answer == "N":
                 self.save()
 
@@ -373,6 +401,8 @@ class Octopus:
                 self.load()
 
 
-if __name__ == '__main__':
-    octopus = Octopus()
-    octopus.main()
+
+app = QApplication([])
+window = Octopus()
+window.show()
+app.exec_()
