@@ -5,8 +5,29 @@ import numpy as np
 import time
 import pyqtgraph as pg
 import sys
+import traceback
 
-class Worker(QRunnable):
+class WorkerSignals(QObject):
+    '''
+    Defines the signals available from a running worker thread.
+
+    Supported signals are:
+
+    finished
+        No data
+    
+    error
+        `tuple` (exctype, value, traceback.format_exc() )
+    
+    result
+        `object` data returned from processing, anything
+
+    '''
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object, object)
+
+class SignalWorker(QRunnable):
     '''
     Worker thread
 
@@ -17,32 +38,58 @@ class Worker(QRunnable):
     :type callback: function
     :param args: Arguments to pass to the callback function
     :param kwargs: Keywords to pass to the callback function
-
     '''
 
-    def __init__(self, fn, *args, **kwargs):
-        super(Worker, self).__init__()
+    def __init__(self, *args, **kwargs):
+        super(SignalWorker, self).__init__()
         # Store constructor arguments (re-used for processing)
-        self.fn = fn
         self.args = args
         self.kwargs = kwargs
-
+        self.signals = WorkerSignals()
+        self.abort = False
     @pyqtSlot()
     def run(self):
         '''
         Initialise the runner function with passed args, kwargs.
         '''
-        self.fn(*self.args, **self.kwargs)
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            self.data = np.random.normal(size=(100,1000))
+            ptr = 0
+            while not self.abort:
+                result = (self.data[ptr%10, :], ptr)
+                self.signals.result.emit(*result)
+
+                ptr += 1
+                time.sleep(0.05)
+                # print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())    
+            time.sleep(0.1)
+            self.update()
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
 
 class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
-        self.abort = False
+        
 
 
         # Layout stuff
-        # self.setGeometry(300, 300, 250, 150)
+        # Menu
+        
+        exitAct = QAction(QIcon('exit.png'), '&Exit', self)
+        exitAct.setShortcut('Ctrl+Q')
+        exitAct.setStatusTip('Exit application')
+        exitAct.triggered.connect(qApp.quit)
+        
+        menubar = self.menuBar()
+        fileMenu = menubar.addMenu('&File')
+        fileMenu.addAction(exitAct)
+
+
         # Main Widget
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
@@ -65,10 +112,6 @@ class MainWindow(QMainWindow):
         self.b.pressed.connect(self.quit)
         self.c = QPushButton ("Change Color")
         self.d = QPushButton ("Whatever")
-       
-        # self.b.move(35, 40)
-        
-        
 
         # Layout
         self.layout = QGridLayout()
@@ -86,56 +129,32 @@ class MainWindow(QMainWindow):
         self.mainWidget.setLayout(self.layout)
         
         
-       
- 
-
+       # Threading
         self.threadpool = QThreadPool()
 
-        worker_plot1 = Worker(self.update)
+        worker_plot1 = SignalWorker()
+        worker_plot1.signals.result.connect(self.plot1)
         self.threadpool.start(worker_plot1)
 
-        worker_plot2 = Worker(self.update2)
+        worker_plot2 = SignalWorker()
+        worker_plot2.signals.result.connect(self.plot2)
         self.threadpool.start(worker_plot2)
 
 
+    def plot1(self, data, ptr):
+        self.curve1.setData(data)
+        self.title.setText(str(np.mean(data)))
+        if ptr == 0:
+            self.graphWidget1.enableAutoRange('xy', False)  ## stop auto-scaling after the first data set is plotted
 
-    def update_text(self):
-        print('updating')
-        val = np.random.randn(1)
-        self.title.setText(str(val))
+    def plot2(self, data, ptr):
+        self.curve2.setData(data)
+        # self.title.setText(str(np.mean(data)))
+        if ptr == 0:
+            self.graphWidget2.enableAutoRange('xy', False)  ## stop auto-scaling after the first data set is plotted
 
-
-    def update(self):
-        
-        self.data = np.random.normal(size=(100,1000))
-        ptr = 0
-        while not self.abort:
-            self.curve1.setData(self.data[ptr%10, :])
-            if ptr == 0:
-                self.graphWidget1.enableAutoRange('xy', False)  ## stop auto-scaling after the first data set is plotted
-            ptr += 1
-            
-            self.title.setText(str(np.mean(self.data[ptr%10, :])))
-            time.sleep(0.05)
-            # print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())    
-        time.sleep(0.1)
-        self.update()
-
-    def update2(self):
-        
-        self.data = np.random.normal(size=(100,1000))
-        ptr = 0
-        while not self.abort:
-            self.curve2.setData(self.data[ptr%10, :])
-            if ptr == 0:
-                self.graphWidget2.enableAutoRange('xy', False)  ## stop auto-scaling after the first data set is plotted
-            ptr += 1
-            time.sleep(0.05)
-
-        time.sleep(0.1)
-        self.update2()
-            # print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())   
-
+    def onMyToolBarButtonClick(self, s):
+        print("click", s)
 
     def quit(self):
         self.abort = not self.abort
