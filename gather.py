@@ -56,7 +56,8 @@ class Gather:
         self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
         self.block_counter = 0
         try:
-            self.dataMemory = np.array([np.nan]*int(self.dataMemorySize))  # nan array to store data in
+            self.dataMemory = np.empty((self.channelCount, self.dataMemorySize))
+            self.dataMemory[:] = np.nan
         except:
             pass
         self.con.close()
@@ -70,9 +71,10 @@ class Gather:
 
         try:
             self.con.connect((self.ip, self.port))    
+            print('\t...done.')
         except TimeoutError:
             gui_retry_cancel(self.retryConnect)
-
+        
     def main(self):
         # print('receive data')
         # Get message header as raw array of chars
@@ -91,12 +93,14 @@ class Gather:
             self.GetProperties()
             # reset block counter
             self.lastBlock = -1
-
-            print("Start")
+            print('#########################')
+            print("Starting Data Acquisition")
             print("Number of channels: " + str(self.channelCount))
             print("Sampling interval: " + str(self.samplingInterval))
             print("Resolutions: " + str(self.resolutions))
             print("Channel Names: " + str(self.channelNames))
+            print('#########################')
+            print('\n')
 
             # Calculate some important values:
             self.sr = int(1000 / (self.samplingInterval / 1000))  # Sampling rate
@@ -104,7 +108,8 @@ class Gather:
             self.theoreticalLooptime = float(self.blockSize) / self.sr
 
             self.dataMemorySize = self.dataMemoryDurS * self.blocks_per_s * self.blockSize  # number of data points in memory
-            self.dataMemory = np.array([np.nan]*int(self.dataMemorySize))  # nan array to store data in
+            self.dataMemory = np.empty((self.channelCount, self.dataMemorySize))
+            self.dataMemory[:] = np.nan
 
             self.data = np.array([np.nan] * int(self.blockSize))
 
@@ -195,6 +200,11 @@ class Gather:
             index = 12 + 4 * i
             value = unpack('<f', self.rawdata[index:index+4])
             self.data.append(value[0])
+        # reshape into chan x timepoints
+        
+        # print(f'self.data = {self.data}, len={len(self.data)}')
+        self.data = np.array(self.data).reshape(self.channelCount, self.blockSize)
+        # value = value / self.channelCount
         self.block_counter += 1
         self.update_data()
         try:
@@ -229,7 +239,7 @@ class Gather:
         if self.blockSize is None:
             self.blockSize = len(self.data)
 
-        assert self.blockSize == len(self.data), "blockSize is supposed to be {} but data was of size {}".format(self.blockSize, len(self.data))
+        assert self.blockSize == len(self.data.flatten()) / self.channelCount, "blockSize is supposed to be {} but data was of size {}".format(self.blockSize, len(self.data))
 
         self.dataMemory = insert(self.dataMemory, self.data)
         self.blockMemory = insert(self.blockMemory, self.block_counter)

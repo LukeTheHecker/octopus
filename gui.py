@@ -1,4 +1,8 @@
 import ctypes
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+import sys
 
 def gui_retry_cancel(fun):
 
@@ -13,3 +17,15 @@ def gui_retry_cancel(fun):
     elif result == 2:
         print('Cancelling...')
 
+
+class SettingsGui(QMainWindow):
+    def __init__(self, parent=None):
+        super(SettingsGui, self).__init__(parent)
+
+        self.textbox = QLineEdit(self)
+        self.textbox.move(20, 20)
+        self.textbox.resize(280,40)
+
+        # Define attributes
+        self.id = self.textbox.text()
+        

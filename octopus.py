@@ -6,7 +6,8 @@ from plot import MplCanvas
 import matplotlib.pyplot as plt
 from callbacks import Callbacks
 from gather import Gather
-from plot import DataMonitor, HistMonitor, Buttons, Textbox
+from plot import DataMonitor, HistMonitor
+from gui import SettingsGui
 from communication import TCP
 import select
 import time
@@ -14,12 +15,12 @@ import numpy as np
 import os
 import json
 import random
-from myWorker import Worker
+from workers import Worker, SignallingWorker
 
 class Octopus(QMainWindow):
-    def __init__(self, figsize=(13, 6), update_frequency=10, scp_trial_duration=2.5, 
+    def __init__(self, update_frequency=10, scp_trial_duration=2.5, 
         scp_baseline_duration=0.25, histcrit=5, targetMarker='response', 
-        second_interview_delay=5):
+        second_interview_delay=5, blinded_axis=True):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
         Parameters:
@@ -42,7 +43,6 @@ class Octopus(QMainWindow):
         self.callbacks = Callbacks()
         self.gatherer = Gather()
         self.internal_tcp = TCP()
-        self.gatherer.fresh_init()
         self.set_layout()
         
 
@@ -51,7 +51,14 @@ class Octopus(QMainWindow):
         self.scp_baseline_duration=scp_baseline_duration
         self.histcrit=histcrit
         self.update_frequency = update_frequency
-        
+        self.channelOfInterestName = 'RP'
+        try:
+            self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
+        except ValueError:
+            print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
+            self.close()
+            return
+            
         # Action parameters
         self.targetMarker = targetMarker
         self.responded = False
@@ -61,76 +68,72 @@ class Octopus(QMainWindow):
         self.quit = False
 
               
-
+        # blinding
+        self.blinded_axis = blinded_axis
+        if self.blinded_axis:
+            self.blinder = np.random.choice([-1, 1], 1)[0]
+        else:
+            self.blinder = 1
         # Data Monitors
         self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
             curve=self.curve1, widget=self.graphWidget1, update_frequency=self.update_frequency,
-            title=self.title)
+            title=self.title, channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
         
         self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
-            scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit)
+            scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit,
+            channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
+        
+        # Misc
         self.load()
+        if not hasattr(self, 'cond_order'):
+            self.read_blinded_conditions()
+        # Timer (for GUI-related tasks):
+        self.timer = QTimer()
+        self.timer.setInterval(10)  # every 50 ms it is called
+        self.timer.timeout.connect(self.GUI_routines)
+        self.timer.start()
 
         # Threading:
         self.worker_gatherer = Worker(self.gather_data)
-        self.worker_datamonitor = Worker(self.update_data_monitor)
-        self.worker_communication = Worker(self.communication_routines)
-        self.worker_GUI_routines = Worker(self.GUI_routines)
+        self.worker_communication = SignallingWorker(self.communication_routines)
 
         self.threadpool = QThreadPool()
         self.threadpool.start(self.worker_gatherer)
-        self.threadpool.start(self.worker_datamonitor)
         self.threadpool.start(self.worker_communication)
-        self.threadpool.start(self.worker_GUI_routines)
+        self.worker_communication.signals.result.connect(self.response_triggered)
 
-        print("done")
-        # self.hist_monitor = HistMonitor(self.gatherer.sr, fig=self.fig, 
-        #     scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit, figsize=figsize)
-
-        # self.buttons = Buttons(self.fig, self.callbacks)
-        # self.textbox = Textbox(self.fig)
-        # # Conditions
-        # self.read_blinded_conditions()
-
-        # # Load state if needed:
-        # 
-
-        # List of functions to create threads for:
-        # self.gatherer.fresh_init()
-
-        # Gather Thread:
-        # self.gather_data()
-
-        ## Plot Thread:
-        # self.update_data_monitor()
-
-        # Routine Thread:
-        # self.checkState()
-        # self.check_response()
-        # self.communicate_state()
-        # self.checkUI()
-        # self.save()
-    
     def set_layout(self):
         # Layout stuff
         # self.setGeometry(300, 300, 250, 150)
         # Main Widget
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
+        # Icon
+        self.setWindowIcon(QIcon('assets/octoicon.svg'))
+        # label = QLabel(self)
+        # pixmap = QPixmap('assets/octoicon.svg')
+        # label.setPixmap(pixmap)
+
+        # Title
+        self.setWindowTitle('Octopus Neurofeedback')
         # Left Graph
         self.graphWidget1 = pg.PlotWidget()
         self.curve1 = self.graphWidget1.plot(pen="r")
         # Title
         self.title = QLabel()
-        self.title.setText("LOL")
+        self.title.setText("Lag")
+        self.title.setFont(QFont("Times", 12))
         # Bottom Graph
         self.MplCanvas = MplCanvas(self, width=5, height=4, dpi=100)
         # Add label
         self.textBox = QLabel()
-        self.textBox.setText("Hello world")
+        self.textBox.setText("State=")
+        self.textBox.setFont(QFont("Times", 14))
         # Add buttons
         self.buttonPresentationcontrol = QPushButton("Allow")
         self.buttonPresentationcontrol.pressed.connect(self.callbacks.presentToggle)
+        self.buttonPresentationcontrol.setStyleSheet("background-color: red")
+
         self.buttonQuit = QPushButton("Quit")
         self.buttonQuit.pressed.connect(self.callbacks.quitexperiment)
 
@@ -150,7 +153,7 @@ class Octopus(QMainWindow):
         self.layout.addWidget(self.buttonQuit, 3, 7, 1, 1)
         self.layout.addWidget(self.buttonforward, 3, 6, 1, 1)
         self.layout.addWidget(self.buttonbackwards, 3, 5, 1, 1)
-
+        # self.layout.addWidget(label, 4, 7, 1, 1)
   
 
         self.mainWidget.setLayout(self.layout)
@@ -159,27 +162,25 @@ class Octopus(QMainWindow):
         self.SubjectID = input("Enter ID: ") 
     
     def gather_data(self):
+        self.gatherer.fresh_init()
         while not self.quit:
-            # print("go")
-            # print("starting data gathering")
             self.gatherer.main()
-            #print("done with data gathering")
-
-    def update_data_monitor(self):
-        while not self.quit:
-            self.data_monitor.update(self.gatherer)
-            time.sleep(0.1)
+        self.gatherer.quit()
 
     def communication_routines(self):
-        while not self.quit:
-            self.communicate_state()
-            self.check_response()
-            self.checkState()
-
+        self.communicate_state()
+        respRequest = self.check_response()
+        if respRequest:
+            return (True, True)
+        else:
+            return (False, False)
+            
     def GUI_routines(self):
-        while not self.quit:
-            self.checkUI()
-            self.save()
+        ''' Routines that are called using a timer ''' 
+        self.data_monitor.update(self.gatherer)
+        self.checkUI()
+        self.save()
+        self.checkState()
 
     def check_response(self):
         ''' Receive response from participant through internal TCP connection with the 
@@ -189,12 +190,21 @@ class Octopus(QMainWindow):
             msg_libet = self.read_from_socket(self.internal_tcp)
             if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
                 print('Response!')
+
                 # self.responded = True
-                self.hist_monitor.button_press(self.gatherer)
-                self.hist_monitor.plot_hist()
+                
                 self.checkState(recent_response=True)
+                return True
+            else:
+                return False
         else:
             return
+
+    def response_triggered(self, result):
+        if result:
+            # print('Signalling to .response_triggered(result) worked!')
+            self.hist_monitor.button_press(self.gatherer)
+            self.hist_monitor.plot_hist()
 
     def communicate_state(self, val=None):
         ''' This method communicates via the TCP Port that is connected with 
@@ -207,25 +217,38 @@ class Octopus(QMainWindow):
             allow_presentation = self.callbacks.allow_presentation
             msg = int(allow_presentation).to_bytes(1, byteorder='big')
             self.internal_tcp.con.send(msg)
-            print(f'sent {int(allow_presentation)} to libet PC')
+            # print(f'sent {int(allow_presentation)} to libet PC')
         else:
             msg = int(val).to_bytes(1, byteorder='big')
             self.internal_tcp.con.send(msg)
-            print(f'sent {int(val)} to libet PC')  
+            # print(f'sent {int(val)} to libet PC')  
 
     def checkUI(self):
         ''' Check the current state of all buttons and perform appropriate actions.'''
         # print('checking ui')
-        self.current_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
+        
+        new_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
+        self.current_state = new_state
+
         if self.callbacks.stateChange != 0:
             print("allow_presentation = False now")
             self.callbacks.allow_presentation = False
+        
+        # Adjust GUI
+        new_button_state = self.callbacks.permission_statement[self.callbacks.allow_presentation]
+        current_button_state = self.buttonPresentationcontrol.text()
+        if new_button_state != current_button_state:
+            # change color
+            if new_button_state == self.callbacks.permission_statement[0]:
+                self.buttonPresentationcontrol.setStyleSheet("background-color: red")
+            elif new_button_state == self.callbacks.permission_statement[1]:
+                self.buttonPresentationcontrol.setStyleSheet("background-color: green")
+
+        self.buttonPresentationcontrol.setText(self.callbacks.permission_statement[self.callbacks.allow_presentation])
 
         self.callbacks.stateChange = 0
         if self.callbacks.quit == True:
             self.current_state = 5
-        # Adjust GUI
-        self.buttonPresentationcontrol.setText(self.callbacks.permission_statement[self.callbacks.allow_presentation])
 
     def checkState(self, recent_response=False):
         ''' This method specifies the current state of the experiment.
@@ -236,7 +259,7 @@ class Octopus(QMainWindow):
             self.check_if_interview()
             if self.go_interview:
                 self.current_state += 1
-                self.callbacks.presentToggle(None)
+                self.callbacks.presentToggle()
                 
         if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histcrit:
             self.current_state = 1
@@ -257,8 +280,9 @@ class Octopus(QMainWindow):
 
             response = self.read_from_socket(self.internal_tcp)
             
-    
+            
             while int.from_bytes(response, "big") != self.communicate_quit_code**2:
+                print("waiting for libet to quit...")
                 self.communicate_state(val=self.communicate_quit_code)
                 response = self.read_from_socket(self.internal_tcp)
                 time.sleep(0.1)
@@ -267,9 +291,9 @@ class Octopus(QMainWindow):
             print("Quitting...")
             self.quit = True
             self.gatherer.quit()
-            self.internal_tcp.quit()
+            # self.internal_tcp.quit()
             self.close()
-            print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
+            # print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
 
         self.textBox.setText(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
         
@@ -315,9 +339,11 @@ class Octopus(QMainWindow):
                 elif condition == 'Negative':
                     self.go_interview = last_scp < avg_scp - sd_scp
 
-        if not self.go_interview:
-            print("SCP not large enough or too few trials to start another interview.")
-
+        if not self.go_interview and n_scps < self.histcrit:
+            print("Too few trials to start interview.")
+        if not self.go_interview and n_scps >= self.histcrit:
+            print("SCP not large enough to start interview.")
+        
     def get_statelist(self):
         ''' Here the number and description of states will be defined.
         '''
@@ -368,7 +394,10 @@ class Octopus(QMainWindow):
             # If there is no folder to store states in -> create it
             os.mkdir('states/')
 
-        State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 'current_state':int(self.current_state), 'SubjectID': self.SubjectID }
+        State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 
+                'current_state':int(self.current_state), 
+                'SubjectID': self.SubjectID,
+                'cond_order': self.cond_order}
 
         json_file = json.dumps(State)
 
@@ -377,12 +406,9 @@ class Octopus(QMainWindow):
             json.dump(json_file, f)
             
     def load(self):
-
         filename = "states/" + self.SubjectID + '.json'
         if not os.path.isfile(filename):
-            print("No state found!")
-            # self.save()
-
+            print("This is a new participant.")
         else:
             answer = input(f"ID {self.SubjectID} already exists. Load data? [Y/N] ")
             if answer == "Y":
@@ -394,15 +420,18 @@ class Octopus(QMainWindow):
                 self.hist_monitor.scpAveragesList = State['scpAveragesList']
                 self.current_state = State['current_state']
                 self.SubjectID = State['SubjectID']
+                self.cond_order = State['cond_order']
             elif answer == "N":
                 self.save()
-
             else:
                 self.load()
 
 
 
+
 app = QApplication([])
+# settings = SettingsGui()
+# settings.show()
 window = Octopus()
 window.show()
 app.exec_()

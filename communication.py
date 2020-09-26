@@ -9,6 +9,7 @@ class TCP:
         communication between this neurofeedback program and the libet stimulus
         presentation program. 
         '''
+        print(f'Attempting connection to {IP} {port}...')
         self.IP = IP
         self.port = port
         self.BufferSize = BufferSize
@@ -25,7 +26,7 @@ class TCP:
         # Put Socket in non-blocking mode:
         self.con.setblocking(0)
 
-        print("TCP Communication Established")
+        print("\t...done.")
         
     def quit(self):
         self.con.close()

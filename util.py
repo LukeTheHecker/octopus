@@ -1,5 +1,6 @@
 import numpy as np
 import time
+
 def insert(arr, piece):
     ''' Takes an array of values and a smaller array of values and 
     inserts the smaller array at the back without changing the 
@@ -13,13 +14,26 @@ def insert(arr, piece):
     # in case of piece being a single value: put in list
     if type(piece) == int or type(piece) == float:
         piece = [piece]
+        
+    if type(arr) == list:
+        arr = np.array(arr)
+        
+    if type(piece) == list:
+        piece = np.array(piece)
 
-    piecelen = len(piece)
-    new_arr = np.zeros((len(arr)))
-    new_arr[0:-piecelen] = arr[piecelen:]
-    new_arr[-piecelen:] = piece
+    if len(arr.shape) == 1:
+        arr = np.expand_dims(arr, axis=0)
+    
+    if len(piece.shape) == 1:
+        piece = np.expand_dims(piece, axis=0)
+
+    piecelen = piece.shape[1]
+    new_arr = np.zeros(arr.shape)
+    new_arr[:, 0:-piecelen] = arr[:, piecelen:]
+    new_arr[:, -piecelen:] = piece
 
     return new_arr
+
 
 class Scheduler:
     def __init__(self, list_of_functions, start, interval):

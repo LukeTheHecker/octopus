@@ -80,14 +80,14 @@ class MainWindow(QMainWindow):
         # Layout stuff
         # Menu
         
-        exitAct = QAction(QIcon('exit.png'), '&Exit', self)
-        exitAct.setShortcut('Ctrl+Q')
-        exitAct.setStatusTip('Exit application')
-        exitAct.triggered.connect(qApp.quit)
+        # exitAct = QAction(QIcon('exit.png'), '&Exit', self)
+        # exitAct.setShortcut('Ctrl+Q')
+        # exitAct.setStatusTip('Exit application')
+        # exitAct.triggered.connect(qApp.quit)
         
-        menubar = self.menuBar()
-        fileMenu = menubar.addMenu('&File')
-        fileMenu.addAction(exitAct)
+        # menubar = self.menuBar()
+        # fileMenu = menubar.addMenu('&File')
+        # fileMenu.addAction(exitAct)
 
 
         # Main Widget

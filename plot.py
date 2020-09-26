@@ -16,7 +16,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 class DataMonitor:
    
     def __init__(self, sr, block_size, curve, widget, window_len_s=10, figsize=(13,6), ylim=(-100, 100), 
-        update_frequency=5, title=None):
+        update_frequency=5, title=None, channelOfInterestIdx=None, blinder=1):
         print('DataMonitor initialized')
         # Basic Settings
         self.sr = sr
@@ -36,6 +36,9 @@ class DataMonitor:
         self.ylim = ylim
         self.tolerance = 0.6
         self.update_frequency = update_frequency
+        self.channelOfInterestIdx = channelOfInterestIdx
+        # Blinding the direction of the effect:
+        self.blinder = blinder
         # Data structures
         self.time = np.linspace(0, self.window_len_s, self.window_size)
         self.data_window = np.array([np.nan] * self.window_size)
@@ -46,7 +49,7 @@ class DataMonitor:
         '''
         # Add title
         # Add axis labels
-        self.curve.setData(self.time, self.data_window)
+        self.curve.setData(self.time, self.data_window*self.blinder, connect="finite")
         self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
         self.widget.setYRange(self.ylim[0], self.ylim[1], padding=0)
 
@@ -60,7 +63,7 @@ class DataMonitor:
         -------
         '''
 
-        dataMemory = gatherer.dataMemory
+        dataMemory = gatherer.dataMemory[self.channelOfInterestIdx, :]
         IncomingBlockMemory = gatherer.blockMemory
         lagtime = gatherer.lag_s
 
@@ -73,24 +76,16 @@ class DataMonitor:
             # all blocks have been plotted
             # print('all blocks have been plotted')
             return
-        # print("plot")
 
-        # print('plot data')
         new_blocks = np.arange(np.max(self.blockMemory) + 1, np.max(self.blockMemory) + 1 + n_new_blocks).astype(int)
-        # print(f'new_blocks={new_blocks}')
         # Block count of the first block that is new
         first_new_block = np.max(self.blockMemory) + 1
-        # print(f'first_new_block={first_new_block}')
         # Block position that shall be replaced first
         block_of_first_replacement = first_new_block % self.n_blocks
-        # print(f'block_of_first_replacement={block_of_first_replacement}')        
         # Index of said block position
         idx_of_first_replacement = int(block_of_first_replacement * self.block_size)
-        # print(f'idx_of_first_replacement={idx_of_first_replacement}')
         # Extract new portion of data
         data_pack = np.array(dataMemory[-n_new_blocks*self.block_size:])
-        # assert len(data_pack) == self.block_size*n_new_blocks, 'somethings wrong with the data pack'
-
         # If new portion of data goes beyong the window boundary:
         if idx_of_first_replacement + len(data_pack) > self.window_size:
             new_win = True
@@ -98,49 +93,36 @@ class DataMonitor:
 
             if len(self.data_window[idx_of_first_replacement:]) != len(data_pack):
                 remainder_length = int(len(data_pack) - len(data_pack[0:len(self.data_window[idx_of_first_replacement:])]))
-                # print(remainder_length)
                 self.data_window[0:remainder_length] = data_pack[len(self.data_window[idx_of_first_replacement:]):]
         else:
-            # print(f'self.data_window went from {self.data_window[idx_of_first_replacement:idx_of_first_replacement+len(data_pack)]}')
             self.data_window[idx_of_first_replacement:idx_of_first_replacement+len(data_pack)] = data_pack
-            # print(f'to {self.data_window[idx_of_first_replacement:idx_of_first_replacement+len(data_pack)]}')
-            # print(f'with data_pack {data_pack}')
-            # print(f'new_blocks: {new_blocks}')
-            # print(f'np.mod(new_blocks, self.window_size)={np.mod(new_blocks, self.window_size / self.n_blocks)}')
             if any(np.mod(new_blocks, self.window_size / self.block_size) == 0):
                 new_win = True
             else:
                 new_win = False
-        
-        # replace nans by zeros!
-        self.data_window[np.isnan(self.data_window)] = 0
 
         # If one window is full, start again on left side
         if new_win: # and self.blockCount != 0:
             # print("starting new window")
-            
-            
-
-            # print("Window is full, starting again \n")
-
             self.time = np.linspace(self.n_window*self.window_len_s, (self.n_window + 1)*self.window_len_s, self.window_size)
-
             # New x and y limits
-            data_range = np.nanmax(self.data_window) - np.nanmin(self.data_window)
-            new_limits = (np.nanmin(self.data_window) - data_range*self.tolerance, np.nanmax(self.data_window) + data_range*self.tolerance)
+            new_limits = self.decide_ylimits()
 
-            self.curve.setData(self.time, self.data_window)
+            # Handle discontinuities in the data
+            con = np.isfinite(self.data_window)
+            self.data_window[~con] = 0
+            # Plot
+            self.curve.setData(self.time, self.data_window*self.blinder, connect=np.logical_and(con, np.roll(con, -1)))
             self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
             self.widget.setYRange(*new_limits, padding=0)
 
             self.n_window += 1
         else:
-            # print("brr")
-            self.curve.setData(self.time, self.data_window)
-            # print(f"new data pack: {data_pack}\n")
-            # print(f"new self.data_window: {self.data_window}\n")
-            # self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
-            
+            con = np.isfinite(self.data_window)
+            self.data_window[~con] = 0
+            # Plot
+            self.curve.setData(self.time, self.data_window*self.blinder, connect=np.logical_and(con, np.roll(con, -1)))
+
         
         if lagtime is not None:
             self.title.setText(f'lag={lagtime:.1f}s')
@@ -148,10 +130,34 @@ class DataMonitor:
         self.blockMemory = IncomingBlockMemory
         self.blockCount += n_new_blocks
 
+    def decide_ylimits(self):
+        ''' Collect the ylimits of each new window and calculate the optimal window size using 5th percentile of lowest
+        values and 95th percentile of highest values.'''
+        
+        data_range = np.nanmax(self.data_window*self.blinder) - np.nanmin(self.data_window*self.blinder)
+        lo, hi = (np.nanmin(self.data_window*self.blinder) - data_range*self.tolerance, np.nanmax(self.data_window*self.blinder) + data_range*self.tolerance)
 
+        if not hasattr(self, "minlims"):
+            self.minlims = [lo]
+            self.maxlims = [hi]
+            return (lo, hi)
+
+        self.minlims.append(lo)
+        self.maxlims.append(hi)
+        new_limits = (np.percentile(self.minlims, 5), np.percentile(self.maxlims, 95))
+        return new_limits
+
+
+
+
+    @staticmethod
+    def firstNonNan(listfloats):
+        for i, item in enumerate(listfloats):
+            if np.isnan(item) == False:
+                return i
 class HistMonitor:
     def __init__(self, sr, canvas, scp_trial_duration=2.5, scp_baseline_duration=0.25, 
-            histcrit=5, figsize=(13,6)):
+            histcrit=5, figsize=(13,6), channelOfInterestIdx=None, blinder=1):
         self.canvas = canvas
         self.sr = sr
         self.scp_trial_duration = scp_trial_duration
@@ -162,8 +168,11 @@ class HistMonitor:
         self.dataMemory = np.array([np.nan] * int(round(self.scp_trial_duration*self.sr)))
         self.scpAveragesList = []
         self.n_responses = len(self.scpAveragesList)
+        self.channelOfInterestIdx = channelOfInterestIdx
         # Figure
         self.initialize_figure()
+        # Blinding the direction of the effect:
+        self.blinder = blinder
         # Action Paramters
         self.current_state = None
         print("HistMonitor initialized")
@@ -177,7 +186,6 @@ class HistMonitor:
 
         self.hist = self.canvas.ax.hist([-1, 0, 1])   
         self.canvas.ax.cla()
-        sns.distplot(np.random.randn(100), ax=self.canvas.ax)
         self.canvas.ax.set_ylabel('Amplitude [microvolt]')
                 
         
@@ -186,7 +194,7 @@ class HistMonitor:
         '''
         # Get data from gatherer:
         back_idx = int(self.scp_trial_duration * self.sr)
-        tmpSCP = gatherer.dataMemory[-back_idx:]
+        tmpSCP = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
         # Correct Baseline:
         tmpSCP -= np.mean(tmpSCP[0:int(self.scp_baseline_duration*self.sr)])
         # Save average
@@ -198,19 +206,27 @@ class HistMonitor:
 
     def plot_hist(self):
         ''' Plot histogram of SCP averages if there are enough of them.'''
-        if len(self.scpAveragesList) < self.histcrit:
-            return
-        # Calculate appropriate number of bins
-        # bins = int(4 + (len(self.scpAveragesList))/5)
+        
         # Clear axis
-        self.canvas.ax.cla()
-        # Plot hist
-        sns.distplot(self.scpAveragesList, ax=self.canvas.ax)
+        self.canvas.ax.clear()
 
+        if len(self.scpAveragesList) < self.histcrit:
+            sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=False,
+                hist=True)
+            
+        else:
+            sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=True,
+                hist=True)
+            # Get the maximum value of the kde distribution
+            maxval = np.max(sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=True, 
+                hist=True).get_lines()[0].get_data()[1])
+
+            self.canvas.ax.plot([self.scpAveragesList[-1]*self.blinder, self.scpAveragesList[-1]*self.blinder], [0, maxval], 'r')
         # Update title
         self.n_responses = len(self.scpAveragesList)
         self.title = f'Histogram of {self.n_responses} responses'
         self.canvas.ax.set_title(self.title, fontsize=14)
+        self.canvas.draw()
 
 
 class Buttons:
