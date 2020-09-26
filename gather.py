@@ -9,7 +9,7 @@ import asyncio
 
 class Gather:
     def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
-        sockettimeout=1):
+        sockettimeout=0.1):
         ''' 
         Parameters:
         -----------
@@ -37,22 +37,15 @@ class Gather:
         self.first_block_ever = None
 
         # Data TCP Connection (with PC that sends RDA)
+        self.connected = False
         self.ip = ip
         self.port = port
         self.sockettimeout = sockettimeout
+        self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
         self.retryConnect()
         
-        
-
-        # Perform main loop until parameters like sr are there.
-        while self.blockSize is None or self.sr is None:
-            self.main()
-   
-
-        # self.fresh_init()
-        print("initialized Gather instance")
-
     def fresh_init(self):
+        ''' Re-Do connection right before experiment.'''
         self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
         self.block_counter = 0
         try:
@@ -65,20 +58,31 @@ class Gather:
         # self.startTime = time.time()
     
     def retryConnect(self):
-        print('Attempting connection to Brain Vision Remote Data Access...')
+        ''' If connection failed it will prompt a dialog 
+            to attempt it again.'''
+        print(f'Attempting connection to RDA {self.ip} {self.port}...')
         self.con = socket(AF_INET, SOCK_STREAM)
-        # self.con.settimeout(self.sockettimeout)
+        self.con.settimeout(self.sockettimeout)
 
         try:
-            self.con.connect((self.ip, self.port))    
+            self.con.connect((self.ip, self.port))
+            self.connected = True
+            # Perform main loop until parameters like sr are there.
+            cnt = 0
+            while (self.blockSize is None or self.sr is None) and cnt < 10:
+                self.main()
+                cnt += 1
             print('\t...done.')
-        except TimeoutError:
-            gui_retry_cancel(self.retryConnect)
+            print("initialized Gather instance")
+        except:
+            self.connected = False
+            gui_retry_cancel(self.retryConnect, self.retryText)
         
     def main(self):
-        # print('receive data')
+        ''' Get data from Brain Vision RDA'''
+        if not self.connected:
+            return
         # Get message header as raw array of chars
-        #print("starting data gathering")
         self.rawhdr = self.RecvData(24)
 
         # Split array into usefull information id1 to id4 are constants
@@ -114,7 +118,6 @@ class Gather:
             self.data = np.array([np.nan] * int(self.blockSize))
 
         elif msgtype == 4:
-
             # Data message, extract data and markers
             self.GetData()
             
@@ -135,8 +138,8 @@ class Gather:
             print("Stop")
             self.quit()
    
-    # Helper function for receiving whole message
     def RecvData(self, requestedSize):
+        ''' Helper function for receiving whole message.'''
         returnStream = bytearray()#''
 
         while len(returnStream) < requestedSize:
@@ -147,10 +150,10 @@ class Gather:
             returnStream += databytes
         return returnStream   
     
-    # Helper function for splitting a raw array of
-    # zero terminated strings (C) into an array of python strings
     @staticmethod
     def SplitString(raw):
+        ''' Helper function for splitting a raw array of
+            zero terminated strings (C) into an array of python strings'''
         stringlist = []
         s = ""
         raw = raw.decode('utf-8')
@@ -163,10 +166,9 @@ class Gather:
 
         return stringlist
 
-    # Helper function for extracting eeg properties from a raw data array
-    # read from tcpip socket
     def GetProperties(self):
-
+        ''' Helper function for extracting eeg properties from a raw data array
+            read from TCP IP socket'''
         # Extract numerical data
         (self.channelCount, self.samplingInterval) = unpack('<Ld', self.rawdata[:12])
 
@@ -181,11 +183,10 @@ class Gather:
         self.channelNames = self.SplitString(self.rawdata[12 + 8 * self.channelCount:])
 
         # return (channelCount, samplingInterval, resolutions, channelNames)
-
-    # Helper function for extracting eeg and marker data from a raw data array
-    # read from tcpip socket       
+  
     def GetData(self):
-
+        ''' Helper function for extracting eeg and marker data from a raw data array
+            read from tcpip socket '''
         # Extract numerical data
         (self.block, self.points, self.markerCount) = unpack('<LLL', self.rawdata[:12])
 
@@ -249,6 +250,7 @@ class Gather:
 
 
 class Marker:
+    ''' Little helper class to extract markers from Brain Vision Amp'''
     def __init__(self):
         self.position = 0
         self.points = 0

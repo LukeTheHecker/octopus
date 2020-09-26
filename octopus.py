@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from callbacks import Callbacks
 from gather import Gather
 from plot import DataMonitor, HistMonitor
-from gui import SettingsGui
+from gui import *
 from communication import TCP
 import select
 import time
@@ -18,90 +18,29 @@ import random
 from workers import Worker, SignallingWorker
 
 class Octopus(QMainWindow):
-    def __init__(self, update_frequency=10, scp_trial_duration=2.5, 
-        scp_baseline_duration=0.25, histcrit=5, targetMarker='response', 
-        second_interview_delay=5, blinded_axis=True):
+    def __init__(self):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
-        Parameters:
-        -----------
-        figsize : list/tuple, size of the figure in which the data monitors etc. 
-            will be plotted
-        updatefrequency : int, frequenzy in Hz at which to update plots.
-        scp_trial_duration : float, duration of an SCP in seconds. Baseline correction 
-            depends on this
-        scp_baseline_duration : float, duraion in seconds for baseline window 
-            starting from -scp_trial_duration
-        histcrit : int, minimum number of SCPs that are required before plotting a 
-            histogram of their average values
+
         '''
         super(Octopus, self).__init__()
 
-        # User input:
-        self.startDialogue()
-        # Objects 
+        # Get callbacks
         self.callbacks = Callbacks()
-        self.gatherer = Gather()
-        self.internal_tcp = TCP()
+        # Set layout
         self.set_layout()
+        # Open Settings:
+        self.open_settings_gui()
         
-
-        # # Plot parameters
-        self.scp_trial_duration=scp_trial_duration
-        self.scp_baseline_duration=scp_baseline_duration
-        self.histcrit=histcrit
-        self.update_frequency = update_frequency
-        self.channelOfInterestName = 'RP'
-        try:
-            self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
-        except ValueError:
-            print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
-            self.close()
-            return
-            
-        # Action parameters
-        self.targetMarker = targetMarker
+        # Misc attributes
+        self.targetMarker = 'response'
+        self.communicate_quit_code = 2
         self.responded = False
         self.get_statelist()
-        self.second_interview_delay = second_interview_delay
-        self.communicate_quit_code = 2
         self.quit = False
 
-              
-        # blinding
-        self.blinded_axis = blinded_axis
-        if self.blinded_axis:
-            self.blinder = np.random.choice([-1, 1], 1)[0]
-        else:
-            self.blinder = 1
-        # Data Monitors
-        self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
-            curve=self.curve1, widget=self.graphWidget1, update_frequency=self.update_frequency,
-            title=self.title, channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
+        print('Initialized Octopus')
         
-        self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
-            scp_trial_duration=self.scp_trial_duration, histcrit=self.histcrit,
-            channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
-        
-        # Misc
-        self.load()
-        if not hasattr(self, 'cond_order'):
-            self.read_blinded_conditions()
-        # Timer (for GUI-related tasks):
-        self.timer = QTimer()
-        self.timer.setInterval(10)  # every 50 ms it is called
-        self.timer.timeout.connect(self.GUI_routines)
-        self.timer.start()
-
-        # Threading:
-        self.worker_gatherer = Worker(self.gather_data)
-        self.worker_communication = SignallingWorker(self.communication_routines)
-
-        self.threadpool = QThreadPool()
-        self.threadpool.start(self.worker_gatherer)
-        self.threadpool.start(self.worker_communication)
-        self.worker_communication.signals.result.connect(self.response_triggered)
-
     def set_layout(self):
         # Layout stuff
         # self.setGeometry(300, 300, 250, 150)
@@ -158,16 +97,92 @@ class Octopus(QMainWindow):
 
         self.mainWidget.setLayout(self.layout)
 
-    def startDialogue(self):
-        self.SubjectID = input("Enter ID: ") 
+    def init_plots(self):
+        if self.gatherer.connected:
+            self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
+                curve=self.curve1, widget=self.graphWidget1, title=self.title, 
+                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
+            
+            self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
+                SCPTrialDuration=self.SCPTrialDuration, histcrit=self.histcrit,
+                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
+            self.plotsReady = True
+        else:
+            self.plotsReady = False
     
+    def open_settings_gui(self):
+        self.mydialog = InputDialog(self)
+        self.mydialog.show()
+        # self.SubjectID = input("Enter ID: ") 
+    
+    def insert_settings(self, settings):
+        ''' When settings are entered, save them in the octopus.'''
+        # Handle Inputs
+        self.SubjectID = settings['SubjectID']
+        self.channelOfInterestName = settings['channelOfInterestName']
+        self.SCPTrialDuration = float(settings['SCPTrialDuration'])
+        self.SCPBaselineDuration = float(settings['SCPBaselineDuration'])
+        self.histCrit = int(settings['histCrit'])
+        self.secondInterviewDelay = int(settings['secondInterviewDelay'])
+        self.blindedAxis = bool(settings['blindedAxis'])
+
+        # blinding
+        if self.blindedAxis:
+            # Blind Plots by randomly inverting amplitudes
+            self.blinder = np.random.choice([-1, 1], 1)[0]
+        else:
+            # No blinding
+            self.blinder = 1
+        print("settings saved to octopus")
+
+        # Load subject data in case of a crash
+        self.load()
+        
+        self.read_blinded_conditions()
+        # Objects 
+        self.gatherer = Gather()
+        self.internal_tcp = TCP()
+        
+        # Handle the requested channel name in case of wrong 
+        # spelling or workspace
+        try:
+            self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
+        except ValueError:
+            print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
+            print('Opening Gui again')
+            self.open_settings_gui()
+
+        # Data Monitors
+        self.plotsReady = False
+        self.init_plots()
+
+        # Set timer for GUI-related tasks:
+        self.timer = QTimer()
+        self.timer.setInterval(10)  # every 50 ms it is called
+        self.timer.timeout.connect(self.GUI_routines)
+        self.timer.start()
+        
+        # Threading:
+        self.worker_gatherer = Worker(self.gather_data)
+        self.worker_communication = SignallingWorker(self.communication_routines)
+
+        self.threadpool = QThreadPool()
+        self.threadpool.start(self.worker_gatherer)
+        self.threadpool.start(self.worker_communication)
+        self.worker_communication.signals.result.connect(self.response_triggered)
+
     def gather_data(self):
+        if not self.gatherer.connected:
+            # If connection to Remote Data Access was not established yet
+            return
         self.gatherer.fresh_init()
         while not self.quit:
             self.gatherer.main()
         self.gatherer.quit()
 
     def communication_routines(self):
+        # if not self.internal_tcp.connected:
+        #     return (False, False)
         self.communicate_state()
         respRequest = self.check_response()
         if respRequest:
@@ -177,16 +192,26 @@ class Octopus(QMainWindow):
             
     def GUI_routines(self):
         ''' Routines that are called using a timer ''' 
-        self.data_monitor.update(self.gatherer)
-        self.checkUI()
-        self.save()
-        self.checkState()
+        if self.plotsReady:
+            self.data_monitor.update(self.gatherer)
+
+        if self.SubjectID != '' and self.plotsReady:
+            
+            self.checkUI()
+            self.save()
+            self.checkState()
 
     def check_response(self):
         ''' Receive response from participant through internal TCP connection with the 
             libet presentation
         '''
+        if not self.internal_tcp.connected:
+            # If connection is not established yet
+            return False
+        
         if self.internal_tcp.con.fileno() != -1:
+            # If connection is running
+            
             msg_libet = self.read_from_socket(self.internal_tcp)
             if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
                 print('Response!')
@@ -210,8 +235,13 @@ class Octopus(QMainWindow):
         ''' This method communicates via the TCP Port that is connected with 
             the libet presentation.
         '''
-        if self.internal_tcp.con.fileno() == -1:
+        if not self.internal_tcp.connected:
+            # If connection is not established yet
             return
+        if self.internal_tcp.con.fileno() == -1:
+            # If connection was closed at some point
+            return
+
         if val is None:
             # Send Current state (allow or forbid) to the libet presentation
             allow_presentation = self.callbacks.allow_presentation
@@ -330,8 +360,8 @@ class Octopus(QMainWindow):
             key = self.cond_order[1]
             condition = self.conds[key]
             # Make sure there were some trials between the first and the second interview
-            # using the "second_interview_delay" variable.
-            if n_scps < self.trials_until_first_interview + self.second_interview_delay:
+            # using the "secondInterviewDelay" variable.
+            if n_scps < self.trials_until_first_interview + self.secondInterviewDelay:
                 self.go_interview = False
             else:
                 if condition == 'Positive':
@@ -364,16 +394,17 @@ class Octopus(QMainWindow):
             This assignment is stored in a dictionary and the condition order will be defined
             randomized by shuffling.
         '''
-        filename = "blinding.txt"
-        assert os.path.isfile(filename), 'json file called {} needs to be present for proper blinding.'.format(filename)
-        # Read json
-        with open('blinding.txt', 'r') as infile:
-            json_text_read = json.load(infile)
-        # Json to python dictionary
-        self.conds = json.loads(json_text_read)
-        # Shuffle order of conditions
-        self.cond_order = [key for key in self.conds.keys()]
-        random.shuffle(self.cond_order)
+        if not hasattr(self, 'cond_order'):
+            filename = "blinding.txt"
+            assert os.path.isfile(filename), 'json file called {} needs to be present for proper blinding.'.format(filename)
+            # Read json
+            with open('blinding.txt', 'r') as infile:
+                json_text_read = json.load(infile)
+            # Json to python dictionary
+            self.conds = json.loads(json_text_read)
+            # Shuffle order of conditions
+            self.cond_order = [key for key in self.conds.keys()]
+            random.shuffle(self.cond_order)
 
     def read_from_socket(self, socket):
         if socket.con.fileno() == -1:
@@ -390,6 +421,7 @@ class Octopus(QMainWindow):
         ''' Save the current state of the experiment. 
         (not finished)
         '''
+        print('saving')
         if not os.path.isdir('states/'):
             # If there is no folder to store states in -> create it
             os.mkdir('states/')
@@ -406,6 +438,9 @@ class Octopus(QMainWindow):
             json.dump(json_file, f)
             
     def load(self):
+        if self.SubjectID != '':
+            return
+            
         filename = "states/" + self.SubjectID + '.json'
         if not os.path.isfile(filename):
             print("This is a new participant.")
@@ -430,8 +465,9 @@ class Octopus(QMainWindow):
 
 
 app = QApplication([])
-# settings = SettingsGui()
-# settings.show()
+
 window = Octopus()
+print('tik')
 window.show()
+print('tok')
 app.exec_()

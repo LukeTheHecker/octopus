@@ -16,7 +16,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 class DataMonitor:
    
     def __init__(self, sr, block_size, curve, widget, window_len_s=10, figsize=(13,6), ylim=(-100, 100), 
-        update_frequency=5, title=None, channelOfInterestIdx=None, blinder=1):
+        title=None, channelOfInterestIdx=None, blinder=1):
         print('DataMonitor initialized')
         # Basic Settings
         self.sr = sr
@@ -35,7 +35,6 @@ class DataMonitor:
         self.title = title
         self.ylim = ylim
         self.tolerance = 0.6
-        self.update_frequency = update_frequency
         self.channelOfInterestIdx = channelOfInterestIdx
         # Blinding the direction of the effect:
         self.blinder = blinder
@@ -62,7 +61,9 @@ class DataMonitor:
         Return:
         -------
         '''
-
+        if not gatherer.connected:
+            print("goes here")
+            return
         dataMemory = gatherer.dataMemory[self.channelOfInterestIdx, :]
         IncomingBlockMemory = gatherer.blockMemory
         lagtime = gatherer.lag_s
@@ -155,17 +156,18 @@ class DataMonitor:
         for i, item in enumerate(listfloats):
             if np.isnan(item) == False:
                 return i
+
 class HistMonitor:
-    def __init__(self, sr, canvas, scp_trial_duration=2.5, scp_baseline_duration=0.25, 
+    def __init__(self, sr, canvas, SCPTrialDuration=2.5, scp_baseline_duration=0.25, 
             histcrit=5, figsize=(13,6), channelOfInterestIdx=None, blinder=1):
         self.canvas = canvas
         self.sr = sr
-        self.scp_trial_duration = scp_trial_duration
+        self.SCPTrialDuration = SCPTrialDuration
         self.scp_baseline_duration = scp_baseline_duration
         self.histcrit = histcrit
         self.package_size = None
         # Data
-        self.dataMemory = np.array([np.nan] * int(round(self.scp_trial_duration*self.sr)))
+        self.dataMemory = np.array([np.nan] * int(round(self.SCPTrialDuration*self.sr)))
         self.scpAveragesList = []
         self.n_responses = len(self.scpAveragesList)
         self.channelOfInterestIdx = channelOfInterestIdx
