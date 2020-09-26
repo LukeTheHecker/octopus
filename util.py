@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import ctypes
 
 def insert(arr, piece):
     ''' Takes an array of values and a smaller array of values and 
@@ -34,6 +35,15 @@ def insert(arr, piece):
 
     return new_arr
 
+def gui_retry_cancel(fun, text=('Connection could not be established.', 'Try again?')):
+    MB_OK = 0x00000000
+    result = ctypes.windll.user32.MessageBoxW(0, text[0], text[1], MB_OK)
+    print(f'result={result}')
+    if result == 1:
+        print('Retrying...\n')
+        fun()
+    time.sleep(0.5)
+    # fun()
 
 class Scheduler:
     def __init__(self, list_of_functions, start, interval):

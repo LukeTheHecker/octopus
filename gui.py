@@ -1,19 +1,9 @@
-import ctypes
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 import sys
 import time
 
-def gui_retry_cancel(fun, text=('Connection could not be established.', 'Try again?')):
-    MB_OK = 0x00000000
-    result = ctypes.windll.user32.MessageBoxW(0, text[0], text[1], MB_OK)
-    print(f'result={result}')
-    if result == 1:
-        print('Retrying...\n')
-        fun()
-    time.sleep(0.5)
-    # fun()
 
 
 
@@ -59,7 +49,7 @@ class InputDialog(QMainWindow):
 
     def getInputs(self):
         settings = {'SubjectID': self.SubjectID.text(),
-                    'channelOfInterestName': self.channelOfInterestName,
+                    'channelOfInterestName': self.channelOfInterestName.text(),
                     'SCPTrialDuration': self.SCPTrialDuration.text(),
                     'SCPBaselineDuration': self.SCPBaselineDuration.text(),
                     'histCrit': self.histCrit.text(),
@@ -84,27 +74,3 @@ class InputDialog(QMainWindow):
         self.parent.insert_settings(settings)
 
 
-class MainWindow(QWidget):
-    def __init__(self,):
-        super().__init__()
-        
-        self.show()
-        self.open_settings_gui()
-
-
-
-    
-    def open_settings_gui(self):
-        self.mydialog = InputDialog(self)
-        self.mydialog.show()
-
-if __name__ == '__main__':
-
-    import sys
-    app = QApplication([])
-    win = MainWindow()
-    win.show()
-    # if win.exec():
-    #     print(win.getInputs())
-    # exit(0)
-    app.exec_()

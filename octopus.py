@@ -43,7 +43,6 @@ class Octopus(QMainWindow):
         
     def set_layout(self):
         # Layout stuff
-        # self.setGeometry(300, 300, 250, 150)
         # Main Widget
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
@@ -55,9 +54,25 @@ class Octopus(QMainWindow):
 
         # Title
         self.setWindowTitle('Octopus Neurofeedback')
-        # Left Graph
+        # Data monitor Graph
         self.graphWidget1 = pg.PlotWidget()
-        self.curve1 = self.graphWidget1.plot(pen="r")
+        
+        pen = pg.mkPen(color='r', width=2)
+        self.curve1 = self.graphWidget1.plot(pen=pen)
+        
+        # Styling
+        # self.graphWidget1.plotItem.getAxis('left').setPen(pen)
+        # self.graphWidget1.plotItem.getAxis('bottom').setPen(pen)
+        # self.graphWidget1.setBackground((255, 255, 255))
+        # self.curve1.setData([1, 2, 3], [3, 3, 2], width=0.1)
+        # font=QFont("Times", 10)
+        # font.setPixelSize(10)
+        # self.graphWidget1.getAxis("bottom").setStyle(tickFont = font)
+        # self.graphWidget1.getAxis("bottom").setStyle(tickTextOffset = 20)
+        # labelstyle = {'color': (0, 0, 0), 'font-size': '14pt'}
+        # self.graphWidget1.getAxis("bottom").setLabel("text", units='mV', **labelstyle)
+        # self.graphWidget1.getAxis("left").setStyle(tickFont = font)
+        # self.graphWidget1.getAxis("left").setStyle(tickTextOffset = 20)
         # Title
         self.title = QLabel()
         self.title.setText("Lag")
@@ -94,7 +109,6 @@ class Octopus(QMainWindow):
         self.layout.addWidget(self.buttonbackwards, 3, 5, 1, 1)
         # self.layout.addWidget(label, 4, 7, 1, 1)
   
-
         self.mainWidget.setLayout(self.layout)
 
     def init_plots(self):
@@ -126,6 +140,9 @@ class Octopus(QMainWindow):
         self.secondInterviewDelay = int(settings['secondInterviewDelay'])
         self.blindedAxis = bool(settings['blindedAxis'])
 
+        # Add title to datamonitor plot
+        title = f"EEG: {self.channelOfInterestName}"
+        self.graphWidget1.setTitle(title, color="k", size="10pt")
         # blinding
         if self.blindedAxis:
             # Blind Plots by randomly inverting amplitudes
@@ -464,10 +481,3 @@ class Octopus(QMainWindow):
 
 
 
-app = QApplication([])
-
-window = Octopus()
-print('tik')
-window.show()
-print('tok')
-app.exec_()

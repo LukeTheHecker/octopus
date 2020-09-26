@@ -1,7 +1,7 @@
 from socket import *
 import sys
 from tcp import CustomSocket
-from gui import gui_retry_cancel
+from util import gui_retry_cancel
 
 class TCP:
     def __init__(self, IP='192.168.2.122', port=5005, BufferSize=1024, \
