@@ -42,24 +42,17 @@ class Gather:
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
-        self.retryConnect()
-        
-    def fresh_init(self):
-        ''' Re-Do connection right before experiment.'''
-        self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
-        self.block_counter = 0
-        try:
-            self.dataMemory = np.empty((self.channelCount, self.dataMemorySize))
-            self.dataMemory[:] = np.nan
-        except:
-            pass
-        self.con.close()
-        self.retryConnect()
-        # self.startTime = time.time()
+        self.connect()
     
-    def retryConnect(self):
+    def connect(self):
         ''' If connection failed it will prompt a dialog 
             to attempt it again.'''
+
+        if hasattr(self, 'con'):
+            if self.connected:
+                print('Gatherer is already connected')
+                return
+
         print(f'Attempting connection to RDA {self.ip} {self.port}...')
         self.con = socket(AF_INET, SOCK_STREAM)
         self.con.settimeout(self.sockettimeout)
@@ -73,11 +66,27 @@ class Gather:
                 self.main()
                 cnt += 1
             print('\t...done.')
-            print("initialized Gather instance")
+            return True
         except:
             self.connected = False
-            gui_retry_cancel(self.retryConnect, self.retryText)
+            print('\t...failed.')
+            return False
+            # gui_retry_cancel(self.connect, self.retryText)
         
+    def fresh_init(self):
+        ''' Re-Do connection right before experiment.'''
+        self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
+        self.block_counter = 0
+        self.dataMemory = np.empty((self.channelCount, self.dataMemorySize))
+        self.dataMemory[:] = np.nan
+
+        # Close connection if there is one at all:
+        if hasattr(self, 'con'):
+            if self.connected:
+                self.con.close()            
+        self.connect()
+        # self.startTime = time.time()
+       
     def main(self):
         ''' Get data from Brain Vision RDA'''
         if not self.connected:
@@ -138,6 +147,16 @@ class Gather:
             print("Stop")
             self.quit()
    
+    def gather_data(self):
+        if not self.connected:
+            # If connection to Remote Data Access was not established yet
+            return
+        self.fresh_init()
+        while not self.quit:
+            self.main()
+        self.quit()
+
+
     def RecvData(self, requestedSize):
         ''' Helper function for receiving whole message.'''
         returnStream = bytearray()#''

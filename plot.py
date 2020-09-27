@@ -62,7 +62,6 @@ class DataMonitor:
         -------
         '''
         if not gatherer.connected:
-            print("goes here")
             return
         dataMemory = gatherer.dataMemory[self.channelOfInterestIdx, :]
         IncomingBlockMemory = gatherer.blockMemory

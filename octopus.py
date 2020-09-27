@@ -2,14 +2,13 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 import pyqtgraph as pg
-from plot import MplCanvas
+
 import matplotlib.pyplot as plt
 from callbacks import Callbacks
 from gather import Gather
 from plot import DataMonitor, HistMonitor
 from gui import *
-from communication import TCP
-import select
+from communication import StimulusCommunication
 import time
 import numpy as np
 import os
@@ -17,119 +16,32 @@ import json
 import random
 from workers import Worker, SignallingWorker
 
-class Octopus(QMainWindow):
+class Octopus(QMainWindow, MainWindow):
     def __init__(self):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
-
         '''
         super(Octopus, self).__init__()
-
-        # Get callbacks
-        self.callbacks = Callbacks()
-        # Set layout
-        self.set_layout()
-        # Open Settings:
+        # Initialize callbacks
+        self.callbacks = Callbacks(self)
+        # Open Settings GUI
         self.open_settings_gui()
         
         # Misc attributes
         self.targetMarker = 'response'
         self.communicate_quit_code = 2
         self.responded = False
+        self.current_state = 0
         self.get_statelist()
         self.quit = False
-
         print('Initialized Octopus')
-        
-    def set_layout(self):
-        # Layout stuff
-        # Main Widget
-        self.mainWidget = QWidget()
-        self.setCentralWidget(self.mainWidget)
-        # Icon
-        self.setWindowIcon(QIcon('assets/octoicon.svg'))
-        # label = QLabel(self)
-        # pixmap = QPixmap('assets/octoicon.svg')
-        # label.setPixmap(pixmap)
-
-        # Title
-        self.setWindowTitle('Octopus Neurofeedback')
-        # Data monitor Graph
-        self.graphWidget1 = pg.PlotWidget()
-        
-        pen = pg.mkPen(color='r', width=2)
-        self.curve1 = self.graphWidget1.plot(pen=pen)
-        
-        # Styling
-        # self.graphWidget1.plotItem.getAxis('left').setPen(pen)
-        # self.graphWidget1.plotItem.getAxis('bottom').setPen(pen)
-        # self.graphWidget1.setBackground((255, 255, 255))
-        # self.curve1.setData([1, 2, 3], [3, 3, 2], width=0.1)
-        # font=QFont("Times", 10)
-        # font.setPixelSize(10)
-        # self.graphWidget1.getAxis("bottom").setStyle(tickFont = font)
-        # self.graphWidget1.getAxis("bottom").setStyle(tickTextOffset = 20)
-        # labelstyle = {'color': (0, 0, 0), 'font-size': '14pt'}
-        # self.graphWidget1.getAxis("bottom").setLabel("text", units='mV', **labelstyle)
-        # self.graphWidget1.getAxis("left").setStyle(tickFont = font)
-        # self.graphWidget1.getAxis("left").setStyle(tickTextOffset = 20)
-        # Title
-        self.title = QLabel()
-        self.title.setText("Lag")
-        self.title.setFont(QFont("Times", 12))
-        # Bottom Graph
-        self.MplCanvas = MplCanvas(self, width=5, height=4, dpi=100)
-        # Add label
-        self.textBox = QLabel()
-        self.textBox.setText("State=")
-        self.textBox.setFont(QFont("Times", 14))
-        # Add buttons
-        self.buttonPresentationcontrol = QPushButton("Allow")
-        self.buttonPresentationcontrol.pressed.connect(self.callbacks.presentToggle)
-        self.buttonPresentationcontrol.setStyleSheet("background-color: red")
-
-        self.buttonQuit = QPushButton("Quit")
-        self.buttonQuit.pressed.connect(self.callbacks.quitexperiment)
-
-        self.buttonforward = QPushButton("->")
-        self.buttonforward.pressed.connect(self.callbacks.stateforward)
-
-        self.buttonbackwards = QPushButton("<-")
-        self.buttonbackwards.pressed.connect(self.callbacks.statebackwards)
-        
-        # Layout
-        self.layout = QGridLayout()
-        self.layout.addWidget(self.graphWidget1, 1,0, 2, 4)
-        self.layout.addWidget(self.title, 0,0, 1, 1)
-        self.layout.addWidget(self.MplCanvas, 3,0, 2, 4)
-        self.layout.addWidget(self.textBox, 1, 4, 2,4)
-        self.layout.addWidget(self.buttonPresentationcontrol, 2, 5, 1, 2)
-        self.layout.addWidget(self.buttonQuit, 3, 7, 1, 1)
-        self.layout.addWidget(self.buttonforward, 3, 6, 1, 1)
-        self.layout.addWidget(self.buttonbackwards, 3, 5, 1, 1)
-        # self.layout.addWidget(label, 4, 7, 1, 1)
-  
-        self.mainWidget.setLayout(self.layout)
-
-    def init_plots(self):
-        if self.gatherer.connected:
-            self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
-                curve=self.curve1, widget=self.graphWidget1, title=self.title, 
-                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
-            
-            self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
-                SCPTrialDuration=self.SCPTrialDuration, histcrit=self.histcrit,
-                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
-            self.plotsReady = True
-        else:
-            self.plotsReady = False
     
     def open_settings_gui(self):
         self.mydialog = InputDialog(self)
         self.mydialog.show()
         # self.SubjectID = input("Enter ID: ") 
     
-    def insert_settings(self, settings):
+    def run(self, settings):
         ''' When settings are entered, save them in the octopus.'''
         # Handle Inputs
         self.SubjectID = settings['SubjectID']
@@ -156,18 +68,20 @@ class Octopus(QMainWindow):
         self.load()
         
         self.read_blinded_conditions()
+
         # Objects 
         self.gatherer = Gather()
-        self.internal_tcp = TCP()
+        self.internal_tcp = StimulusCommunication(self)
         
         # Handle the requested channel name in case of wrong 
         # spelling or workspace
-        try:
-            self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
-        except ValueError:
-            print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
-            print('Opening Gui again')
-            self.open_settings_gui()
+        # try:
+        #     self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
+        # except ValueError:
+        #     print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
+        #     print('Opening Gui again')
+        #     self.open_settings_gui()
+        # except AttributeError:
 
         # Data Monitors
         self.plotsReady = False
@@ -180,125 +94,60 @@ class Octopus(QMainWindow):
         self.timer.start()
         
         # Threading:
-        self.worker_gatherer = Worker(self.gather_data)
-        self.worker_communication = SignallingWorker(self.communication_routines)
+        self.worker_gatherer = Worker(self.gatherer.gather_data)
+        self.worker_communication = SignallingWorker(self.internal_tcp.communication_routines)
 
         self.threadpool = QThreadPool()
         self.threadpool.start(self.worker_gatherer)
         self.threadpool.start(self.worker_communication)
-        self.worker_communication.signals.result.connect(self.response_triggered)
-
-    def gather_data(self):
-        if not self.gatherer.connected:
-            # If connection to Remote Data Access was not established yet
-            return
-        self.gatherer.fresh_init()
-        while not self.quit:
-            self.gatherer.main()
-        self.gatherer.quit()
-
-    def communication_routines(self):
-        # if not self.internal_tcp.connected:
-        #     return (False, False)
-        self.communicate_state()
-        respRequest = self.check_response()
-        if respRequest:
-            return (True, True)
-        else:
-            return (False, False)
+        self.worker_communication.signals.result.connect(self.response_triggered)  
+    
+    def init_plots(self):
+        if self.gatherer.connected and self.internal_tcp.connected:
+            self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
+                curve=self.curve1, widget=self.graphWidget1, title=self.title, 
+                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
             
+            self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
+                SCPTrialDuration=self.SCPTrialDuration, histcrit=self.histcrit,
+                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
+            self.plotsReady = True
+        else:
+            self.plotsReady = False
+
     def GUI_routines(self):
         ''' Routines that are called using a timer ''' 
         if self.plotsReady:
             self.data_monitor.update(self.gatherer)
 
-        if self.SubjectID != '' and self.plotsReady:
-            
+        if self.plotsReady:
             self.checkUI()
             self.save()
             self.checkState()
 
-    def check_response(self):
-        ''' Receive response from participant through internal TCP connection with the 
-            libet presentation
-        '''
-        if not self.internal_tcp.connected:
-            # If connection is not established yet
-            return False
-        
-        if self.internal_tcp.con.fileno() != -1:
-            # If connection is running
-            
-            msg_libet = self.read_from_socket(self.internal_tcp)
-            if msg_libet.decode(self.internal_tcp.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.internal_tcp.encoding):
-                print('Response!')
-
-                # self.responded = True
-                
-                self.checkState(recent_response=True)
-                return True
-            else:
-                return False
-        else:
-            return
-
     def response_triggered(self, result):
+        ''' This function is called whenever the participant presses the button.'''
         if result:
-            # print('Signalling to .response_triggered(result) worked!')
             self.hist_monitor.button_press(self.gatherer)
             self.hist_monitor.plot_hist()
 
-    def communicate_state(self, val=None):
-        ''' This method communicates via the TCP Port that is connected with 
-            the libet presentation.
-        '''
-        if not self.internal_tcp.connected:
-            # If connection is not established yet
-            return
-        if self.internal_tcp.con.fileno() == -1:
-            # If connection was closed at some point
-            return
-
-        if val is None:
-            # Send Current state (allow or forbid) to the libet presentation
-            allow_presentation = self.callbacks.allow_presentation
-            msg = int(allow_presentation).to_bytes(1, byteorder='big')
-            self.internal_tcp.con.send(msg)
-            # print(f'sent {int(allow_presentation)} to libet PC')
-        else:
-            msg = int(val).to_bytes(1, byteorder='big')
-            self.internal_tcp.con.send(msg)
-            # print(f'sent {int(val)} to libet PC')  
-
     def checkUI(self):
         ''' Check the current state of all buttons and perform appropriate actions.'''
-        # print('checking ui')
-        
-        new_state = np.clip(self.current_state + self.callbacks.stateChange, a_min = 0, a_max = 5)
-        self.current_state = new_state
+        pass
+        # # Change button color and text in case of a state change:
+        # new_button_state = self.callbacks.permission_statement[self.callbacks.allow_presentation]
+        # current_button_state = self.buttonPresentationcontrol.text()
+        # if new_button_state != current_button_state:
+        #     # change color
+        #     if new_button_state == self.callbacks.permission_statement[0]:
+        #         self.buttonPresentationcontrol.setStyleSheet("background-color: red")
+        #     elif new_button_state == self.callbacks.permission_statement[1]:
+        #         self.buttonPresentationcontrol.setStyleSheet("background-color: green")
 
-        if self.callbacks.stateChange != 0:
-            print("allow_presentation = False now")
-            self.callbacks.allow_presentation = False
-        
-        # Adjust GUI
-        new_button_state = self.callbacks.permission_statement[self.callbacks.allow_presentation]
-        current_button_state = self.buttonPresentationcontrol.text()
-        if new_button_state != current_button_state:
-            # change color
-            if new_button_state == self.callbacks.permission_statement[0]:
-                self.buttonPresentationcontrol.setStyleSheet("background-color: red")
-            elif new_button_state == self.callbacks.permission_statement[1]:
-                self.buttonPresentationcontrol.setStyleSheet("background-color: green")
-
-        self.buttonPresentationcontrol.setText(self.callbacks.permission_statement[self.callbacks.allow_presentation])
-
-        self.callbacks.stateChange = 0
-        if self.callbacks.quit == True:
-            self.current_state = 5
+        # self.buttonPresentationcontrol.setText(self.callbacks.permission_statement[self.callbacks.allow_presentation])
 
     def checkState(self, recent_response=False):
-        ''' This method specifies the current state of the experiment.
+        ''' This method specifies the logic of the experiment.
             States are listed in get_statelist().
         '''
         # print('Checking state')
@@ -321,19 +170,7 @@ class Octopus(QMainWindow):
         if self.current_state == 5 or self.callbacks.quit == True:
             # Save experiment
             #...
-            # Send message to libet presentation that the experiment is over
-            self.internal_tcp.con.setblocking(0)
-            self.communicate_state(val=self.communicate_quit_code)
-
-            response = self.read_from_socket(self.internal_tcp)
-            
-            
-            while int.from_bytes(response, "big") != self.communicate_quit_code**2:
-                print("waiting for libet to quit...")
-                self.communicate_state(val=self.communicate_quit_code)
-                response = self.read_from_socket(self.internal_tcp)
-                time.sleep(0.1)
-            print(f'Recieved response: {response}')
+            self.internal_tcp.quit()
             # Quit experiment
             print("Quitting...")
             self.quit = True
@@ -369,6 +206,7 @@ class Octopus(QMainWindow):
                 self.go_interview = last_scp > avg_scp + sd_scp
             elif condition == 'Negative':
                 self.go_interview = last_scp < avg_scp - sd_scp
+
             # Save how many trials it took until the first interview was started
             self.trials_until_first_interview = n_scps
 
@@ -403,7 +241,6 @@ class Octopus(QMainWindow):
             "Interview for second condition.",
             "Quit Experiment."
             ]
-        self.current_state = 0
 
     def read_blinded_conditions(self):
         ''' This method reads a json file called blinding.txt that contains the assignment 
@@ -422,17 +259,6 @@ class Octopus(QMainWindow):
             # Shuffle order of conditions
             self.cond_order = [key for key in self.conds.keys()]
             random.shuffle(self.cond_order)
-
-    def read_from_socket(self, socket):
-        if socket.con.fileno() == -1:
-            return
-
-        ready = select.select([socket.con], [], [], socket.timeout)
-        response = b''
-        if ready[0]:
-            response = socket.con.recv(socket.BufferSize)
-
-        return response
 
     def save(self):
         ''' Save the current state of the experiment. 
