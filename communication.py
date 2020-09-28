@@ -5,7 +5,7 @@ import select
 
 class TCP:
     def __init__(self, IP='192.168.2.122', port=5005, BufferSize=1024, \
-        encoding='utf-8', timeout=0.01):
+        encoding='utf-8', timeout=0.1):
         ''' This method creates an internal socket connection which enables 
         communication between this neurofeedback program and the libet stimulus
         presentation program. 
@@ -24,8 +24,7 @@ class TCP:
         
     def connect(self):
         if self.connected:
-            print(f"Internal TCP connection is already established to \
-                {self.IP} {self.port}")
+            print(f"Internal TCP connection is already established to {self.IP} {self.port}")
             return
         try:
             print(f'Attempting connection to {self.IP} {self.port}...')
@@ -40,9 +39,11 @@ class TCP:
             print("\t...done.")
             return True
         except:
-            self.connected = False
-            print('\t...failed.')
-            return False
+            pass
+
+        self.connected = False
+        print('\t...failed.')
+        return False
             # gui_retry_cancel(self.connect, self.retryText)
             # print("\t...connection to Libet PC could not be established.")
 
@@ -66,7 +67,7 @@ class StimulusCommunication(TCP):
             # If connection is running
             
             msg_libet = self.read_from_socket()
-            if msg_libet.decode(self.encoding) == self.targetMarker or self.targetMarker in msg_libet.decode(self.encoding):
+            if msg_libet.decode(self.encoding) == self.octopus.targetMarker or self.octopus.targetMarker in msg_libet.decode(self.encoding):
                 print('Response!')                
                 self.octopus.checkState(recent_response=True)
                 return True
@@ -88,7 +89,7 @@ class StimulusCommunication(TCP):
 
         if val is None:
             # Send Current state (allow or forbid) to the libet presentation
-            allow_presentation = self.callbacks.allow_presentation
+            allow_presentation = self.octopus.callbacks.allow_presentation
             msg = int(allow_presentation).to_bytes(1, byteorder='big')
             self.con.send(msg)
             # print(f'sent {int(allow_presentation)} to libet PC')
@@ -105,14 +106,14 @@ class StimulusCommunication(TCP):
         else:
             return (False, False)
     
-    def read_from_socket(self, socket):
-        if socket.con.fileno() == -1:
+    def read_from_socket(self):
+        if self.con.fileno() == -1:
             return
 
-        ready = select.select([socket.con], [], [], socket.timeout)
+        ready = select.select([self.con], [], [], self.timeout)
         response = b''
         if ready[0]:
-            response = socket.con.recv(socket.BufferSize)
+            response = self.con.recv(self.BufferSize)
 
         return response
     

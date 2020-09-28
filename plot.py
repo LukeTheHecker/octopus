@@ -63,6 +63,7 @@ class DataMonitor:
         '''
         if not gatherer.connected:
             return
+
         dataMemory = gatherer.dataMemory[self.channelOfInterestIdx, :]
         IncomingBlockMemory = gatherer.blockMemory
         lagtime = gatherer.lag_s
@@ -157,17 +158,17 @@ class DataMonitor:
                 return i
 
 class HistMonitor:
-    def __init__(self, sr, canvas, SCPTrialDuration=2.5, scp_baseline_duration=0.25, 
-            histcrit=5, figsize=(13,6), channelOfInterestIdx=None, blinder=1):
+    def __init__(self, sr, canvas, SCPTrialDuration=2.5, scpBaselineDuration=0.25, 
+            histCrit=5, figsize=(13,6), channelOfInterestIdx=None, blinder=1):
         self.canvas = canvas
         self.sr = sr
         self.SCPTrialDuration = SCPTrialDuration
-        self.scp_baseline_duration = scp_baseline_duration
-        self.histcrit = histcrit
+        self.scpBaselineDuration = scpBaselineDuration
+        self.histCrit = histCrit
         self.package_size = None
         # Data
         self.dataMemory = np.array([np.nan] * int(round(self.SCPTrialDuration*self.sr)))
-        self.scpAveragesList = []
+        self.scpAveragesList = np.array([])
         self.n_responses = len(self.scpAveragesList)
         self.channelOfInterestIdx = channelOfInterestIdx
         # Figure
@@ -194,12 +195,12 @@ class HistMonitor:
         ''' If a button was pressed append the average baseline corrected SCP to a list.
         '''
         # Get data from gatherer:
-        back_idx = int(self.scp_trial_duration * self.sr)
+        back_idx = int(self.SCPTrialDuration * self.sr)
         tmpSCP = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
         # Correct Baseline:
-        tmpSCP -= np.mean(tmpSCP[0:int(self.scp_baseline_duration*self.sr)])
+        tmpSCP -= np.mean(tmpSCP[0:int(self.scpBaselineDuration*self.sr)])
         # Save average
-        self.scpAveragesList.append(np.mean(tmpSCP))
+        self.scpAveragesList = np.append(self.scpAveragesList, np.mean(tmpSCP))
         
         self.n_responses = len(self.scpAveragesList)
         self.title = f'Histogram of {self.n_responses} responses'
@@ -210,12 +211,11 @@ class HistMonitor:
         
         # Clear axis
         self.canvas.ax.clear()
-
-        if len(self.scpAveragesList) < self.histcrit:
+        if len(self.scpAveragesList) < self.histCrit and len(self.scpAveragesList) > 1:
             sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=False,
                 hist=True)
             
-        else:
+        elif len(self.scpAveragesList) >= self.histCrit:
             sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=True,
                 hist=True)
             # Get the maximum value of the kde distribution
@@ -223,6 +223,8 @@ class HistMonitor:
                 hist=True).get_lines()[0].get_data()[1])
 
             self.canvas.ax.plot([self.scpAveragesList[-1]*self.blinder, self.scpAveragesList[-1]*self.blinder], [0, maxval], 'r')
+        else:
+            return 
         # Update title
         self.n_responses = len(self.scpAveragesList)
         self.title = f'Histogram of {self.n_responses} responses'

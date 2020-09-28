@@ -55,7 +55,11 @@ class Callbacks:
 
     def connectRDA(self):
         if hasattr(self.octopus, 'gatherer'):
-            self.octopus.gatherer.connect()
+            result = self.octopus.gatherer.connect()
+        else:
+            return
+        if result:
+            self.octopus.handleChannelIndex() 
     
     def connectLibet(self):
         if hasattr(self.octopus, 'internal_tcp'):

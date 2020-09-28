@@ -4,9 +4,6 @@ import numpy as np
 import time
 from util import *
 
-import asyncio
-
-
 class Gather:
     def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
         sockettimeout=0.1):
@@ -42,16 +39,16 @@ class Gather:
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
-        self.connect()
+        
     
     def connect(self):
         ''' If connection failed it will prompt a dialog 
             to attempt it again.'''
 
-        if hasattr(self, 'con'):
-            if self.connected:
-                print('Gatherer is already connected')
-                return
+        # if hasattr(self, 'con'):
+        #     if self.connected:
+        #         print('Gatherer is already connected')
+        #         return
 
         print(f'Attempting connection to RDA {self.ip} {self.port}...')
         self.con = socket(AF_INET, SOCK_STREAM)
@@ -68,9 +65,10 @@ class Gather:
             print('\t...done.')
             return True
         except:
-            self.connected = False
-            print('\t...failed.')
-            return False
+            pass
+        self.connected = False
+        print('\t...failed.')
+        return False
             # gui_retry_cancel(self.connect, self.retryText)
         
     def fresh_init(self):
@@ -150,12 +148,12 @@ class Gather:
     def gather_data(self):
         if not self.connected:
             # If connection to Remote Data Access was not established yet
+            print("Gatherer is not connected.")
             return
         self.fresh_init()
-        while not self.quit:
+        while True:
             self.main()
-        self.quit()
-
+        # self.quit()
 
     def RecvData(self, requestedSize):
         ''' Helper function for receiving whole message.'''
@@ -260,7 +258,6 @@ class Gather:
             self.blockSize = len(self.data)
 
         assert self.blockSize == len(self.data.flatten()) / self.channelCount, "blockSize is supposed to be {} but data was of size {}".format(self.blockSize, len(self.data))
-
         self.dataMemory = insert(self.dataMemory, self.data)
         self.blockMemory = insert(self.blockMemory, self.block_counter)
 

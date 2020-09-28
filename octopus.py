@@ -71,17 +71,11 @@ class Octopus(QMainWindow, MainWindow):
 
         # Objects 
         self.gatherer = Gather()
+        # self.gatherer.connect()
+        self.callbacks.connectRDA()
         self.internal_tcp = StimulusCommunication(self)
         
-        # Handle the requested channel name in case of wrong 
-        # spelling or workspace
-        # try:
-        #     self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
-        # except ValueError:
-        #     print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
-        #     print('Opening Gui again')
-        #     self.open_settings_gui()
-        # except AttributeError:
+        
 
         # Data Monitors
         self.plotsReady = False
@@ -89,10 +83,15 @@ class Octopus(QMainWindow, MainWindow):
 
         # Set timer for GUI-related tasks:
         self.timer = QTimer()
-        self.timer.setInterval(10)  # every 50 ms it is called
+        self.timer.setInterval(100)  # every 50 ms it is called
         self.timer.timeout.connect(self.GUI_routines)
         self.timer.start()
         
+        self.plotTimer = QTimer()
+        self.plotTimer.setInterval(10)  # every 50 ms it is called
+        self.plotTimer.timeout.connect(self.data_monitor_update)
+        self.plotTimer.start()
+
         # Threading:
         self.worker_gatherer = Worker(self.gatherer.gather_data)
         self.worker_communication = SignallingWorker(self.internal_tcp.communication_routines)
@@ -109,21 +108,23 @@ class Octopus(QMainWindow, MainWindow):
                 channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
             
             self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
-                SCPTrialDuration=self.SCPTrialDuration, histcrit=self.histcrit,
+                SCPTrialDuration=self.SCPTrialDuration, histCrit=self.histCrit,
                 channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
             self.plotsReady = True
         else:
             self.plotsReady = False
 
-    def GUI_routines(self):
-        ''' Routines that are called using a timer ''' 
+    def data_monitor_update(self):
         if self.plotsReady:
             self.data_monitor.update(self.gatherer)
 
+    def GUI_routines(self):
+        ''' Routines that are called using a timer ''' 
         if self.plotsReady:
-            self.checkUI()
             self.save()
             self.checkState()
+        else:
+            self.init_plots()
 
     def response_triggered(self, result):
         ''' This function is called whenever the participant presses the button.'''
@@ -131,20 +132,6 @@ class Octopus(QMainWindow, MainWindow):
             self.hist_monitor.button_press(self.gatherer)
             self.hist_monitor.plot_hist()
 
-    def checkUI(self):
-        ''' Check the current state of all buttons and perform appropriate actions.'''
-        pass
-        # # Change button color and text in case of a state change:
-        # new_button_state = self.callbacks.permission_statement[self.callbacks.allow_presentation]
-        # current_button_state = self.buttonPresentationcontrol.text()
-        # if new_button_state != current_button_state:
-        #     # change color
-        #     if new_button_state == self.callbacks.permission_statement[0]:
-        #         self.buttonPresentationcontrol.setStyleSheet("background-color: red")
-        #     elif new_button_state == self.callbacks.permission_statement[1]:
-        #         self.buttonPresentationcontrol.setStyleSheet("background-color: green")
-
-        # self.buttonPresentationcontrol.setText(self.callbacks.permission_statement[self.callbacks.allow_presentation])
 
     def checkState(self, recent_response=False):
         ''' This method specifies the logic of the experiment.
@@ -157,7 +144,7 @@ class Octopus(QMainWindow, MainWindow):
                 self.current_state += 1
                 self.callbacks.presentToggle()
                 
-        if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histcrit:
+        if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histCrit:
             self.current_state = 1
             self.hist_monitor.current_state = self.current_state
             # self.textbox.statusBox.set_text(f"State={self.current_state}")
@@ -185,7 +172,7 @@ class Octopus(QMainWindow, MainWindow):
         
         n_scps = len(self.hist_monitor.scpAveragesList)
 
-        if n_scps < self.hist_monitor.histcrit:
+        if n_scps < self.hist_monitor.histCrit:
             print("Too few SCPs in list.")
             self.go_interview = False
             return
@@ -224,9 +211,9 @@ class Octopus(QMainWindow, MainWindow):
                 elif condition == 'Negative':
                     self.go_interview = last_scp < avg_scp - sd_scp
 
-        if not self.go_interview and n_scps < self.histcrit:
+        if not self.go_interview and n_scps < self.histCrit:
             print("Too few trials to start interview.")
-        if not self.go_interview and n_scps >= self.histcrit:
+        if not self.go_interview and n_scps >= self.histCrit:
             print("SCP not large enough to start interview.")
         
     def get_statelist(self):
@@ -259,17 +246,27 @@ class Octopus(QMainWindow, MainWindow):
             # Shuffle order of conditions
             self.cond_order = [key for key in self.conds.keys()]
             random.shuffle(self.cond_order)
+    
+    def handleChannelIndex(self):
+        # Handle the requested channel name in case of wrong 
+        # spelling or workspace
+        try:
+            self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
+        except ValueError:
+            print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
+            print('Opening Gui again')
+            self.open_settings_gui()
 
     def save(self):
         ''' Save the current state of the experiment. 
         (not finished)
         '''
-        print('saving')
+        # print('saving')
         if not os.path.isdir('states/'):
             # If there is no folder to store states in -> create it
             os.mkdir('states/')
 
-        State = {'scpAveragesList':self.hist_monitor.scpAveragesList, 
+        State = {'scpAveragesList': list(self.hist_monitor.scpAveragesList), 
                 'current_state':int(self.current_state), 
                 'SubjectID': self.SubjectID,
                 'cond_order': self.cond_order}
