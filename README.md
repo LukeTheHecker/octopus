@@ -4,7 +4,7 @@ The Octupus Neurofeedback is coded in Python 3 using PyQt5 and uses signals from
 
 This program is used for reading EEG data and plotting/ processing it. This can be used as a basic for neurofeedback only if ~100 ms of delay (caused by RDA) is acceptable.
 
-![Octopus Neurofeedback](![alt text](https://github.com/LukeTheHecker/rda_libet/blob/master/assets/Octopuspic.png?raw=true))
+![Octopus Neurofeedback](https://github.com/LukeTheHecker/rda_libet/blob/master/assets/Octopuspic.png?raw=true)
 
 ## Get started
 
