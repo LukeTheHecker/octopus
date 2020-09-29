@@ -8,7 +8,7 @@ This program is used for reading EEG data and plotting/ processing it. This can 
 
 ## Get started
 
-* Install Anaconda/Miniconda 2 or 3
+* Install [Anaconda/Miniconda](https://www.anaconda.com/) 2 or 3
 * create environment using requirements.txt:  
 `conda create --name octo --file requirements.txt`
 * Activate the environment: `conda activate octo`
@@ -24,7 +24,7 @@ python main.py
 Octopus icon made by [Freepik](https://www.flaticon.com/authors/freepik) from [Flaticon](https://www.flaticon.com/).
 
 ## Developers:
-Lukas Hecker
+Lukas Hecker ([website](http://lh-neurosci.appspot.com/))  
 Marianne Hense
 
 ## Group:  

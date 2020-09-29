@@ -31,6 +31,7 @@ class Octopus(MainWindow):
         # Misc attributes
         self.targetMarker = 'response'
         self.communicate_quit_code = 2
+        self.d_est = None
         self.responded = False
         self.current_state = 0
         self.get_statelist()
@@ -272,7 +273,8 @@ class Octopus(MainWindow):
         State = {'scpAveragesList': list(self.hist_monitor.scpAveragesList), 
                 'current_state':int(self.current_state), 
                 'SubjectID': self.SubjectID,
-                'cond_order': self.cond_order}
+                'cond_order': self.cond_order,
+                'd_est': self.d_est}
 
         json_file = json.dumps(State)
 
@@ -299,6 +301,7 @@ class Octopus(MainWindow):
                 self.current_state = State['current_state']
                 self.SubjectID = State['SubjectID']
                 self.cond_order = State['cond_order']
+                self.d_est = State['d_est']
             elif answer == "N":
                 self.save()
             else:
