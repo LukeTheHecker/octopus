@@ -17,7 +17,7 @@ import json
 import random
 from workers import *
 
-class Octopus(QMainWindow, MainWindow):
+class Octopus(MainWindow):
     def __init__(self):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.

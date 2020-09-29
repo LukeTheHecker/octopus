@@ -68,10 +68,13 @@ class Callbacks:
     def connectLibet(self):
         if hasattr(self.octopus, 'internal_tcp'):
             if not self.octopus.internal_tcp.connected:
+                print(f'Attempting connection to {self.octopus.internal_tcp.IP} {self.octopus.internal_tcp.port}...')
                 self.octopus.internal_tcp.accept_connection()
 
     def EOGcorrection(self):
-        self.mydialog = SelectChannels(self.octopus)
-        self.mydialog.show()
+        if self.octopus.gatherer.connected:
+            self.mydialog = SelectChannels(self.octopus)
+            self.mydialog.show()
+        print('EOG correction is not possible until gatherer is connected to RDA.')
 
 # Lets design a button

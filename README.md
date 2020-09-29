@@ -10,9 +10,11 @@ This program is used for reading EEG data and plotting/ processing it. This can 
 
 * Install Anaconda/Miniconda 2 or 3
 * create environment using requirements.txt:  
-`conda env create -n octo -f requirements.txt`
-
-* Run the `main.py` to get started:
+`conda create --name octo --file requirements.txt`
+* Activate the environment: `conda activate octo`
+* Clone this repository using `git clone https://github.com/LukeTheHecker/rda_libet.git` or download the [ZIP file](https://github.com/LukeTheHecker/rda_libet/archive/master.zip).
+* go to the cloned directory using `cd rda_libet`
+* Execute the `main.py` using your conda environment:
 
 ```
 python main.py

@@ -4,14 +4,14 @@ from PyQt5.QtCore import *
 
 import pyqtgraph as pg
 from plot import MplCanvas
-import numpy as np
 from workers import *
 
-class MainWindow:
+class MainWindow(QMainWindow):
     ''' Main Window of the Octopus Neurofeedback App. '''
     def __init__(self):
 
-        
+        super(MainWindow, self).__init__()
+        self.setFixedSize(1200, 700)
         # Create App Window
         # self.mainWidget = QWidget()
         # self.setCentralWidget(self.mainWidget)
@@ -96,7 +96,6 @@ class MainWindow:
         self.setCentralWidget(box)
         # self.mainWidget.setLayout(self.layout)
     
-
 class InputDialog(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -111,7 +110,7 @@ class InputDialog(QMainWindow):
         self.SubjectID = QLineEdit("", self)
         self.channelOfInterestName = QLineEdit("RP", self)
         self.SCPTrialDuration = QLineEdit("2.5", self)
-        self.SCPBaselineDuration = QLineEdit("0.25", self)
+        self.SCPBaselineDuration = QLineEdit("0.20", self)
         self.histCrit = QLineEdit("5", self)
         self.secondInterviewDelay = QLineEdit("5", self)
         self.blindedAxis = QCheckBox(self)
@@ -136,6 +135,12 @@ class InputDialog(QMainWindow):
         
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
+
+        # Action when closing window
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+        # quit = QAction("Quit", self)
+        # quit.triggered.connect(self.show)
+        # quit.triggered.connect(self.show)
 
     def getInputs(self):
         settings = {'SubjectID': self.SubjectID.text(),
@@ -163,12 +168,17 @@ class InputDialog(QMainWindow):
         # All entries are there!
         self.parent.run(settings)
 
-
 class SelectChannels(QWidget):
     def __init__(self, octopus, parent=None):
-        super().__init__(parent)
         
+        # Check if gatherer is connected at all:
         self.octopus = octopus
+        if not self.octopus.gatherer.connected or not hasattr(octopus.gatherer, 'channelNames'):
+            print(f'Cannot call EOG Correction since Gather class is not connected.')
+            return
+
+        super().__init__(parent)
+
         channelnames = self.octopus.gatherer.channelNames
         
         self.layout = QVBoxLayout()

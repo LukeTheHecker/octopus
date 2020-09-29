@@ -45,10 +45,11 @@ class Gather:
         ''' If connection failed it will prompt a dialog 
             to attempt it again.'''
 
-        # if hasattr(self, 'con'):
-        #     if self.connected:
-        #         print('Gatherer is already connected')
-        #         return
+        if hasattr(self, 'con'):
+            if self.connected:
+                if self.sr is not None:
+                    print('Gatherer is already connected')
+                    return
 
         print(f'Attempting connection to RDA {self.ip} {self.port}...')
         self.con = socket(AF_INET, SOCK_STREAM)
@@ -62,6 +63,10 @@ class Gather:
             while (self.blockSize is None or self.sr is None) and cnt < 10:
                 self.main()
                 cnt += 1
+            if self.blockSize is None or self.sr is None:
+                print('\t...failed.')
+                self.connected = False
+                return False
             print('\t...done.')
             return True
         except:

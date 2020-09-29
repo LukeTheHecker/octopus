@@ -1,36 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-import sys
+from mne.filter import filter_data, create_filter, resample
+import numpy as np
+import time
+import matplotlib.pyplot as plt
+dur = 2.5
+sr = 250
 
 
-class Second(QMainWindow):
-    def __init__(self, parent=None):
-        super(Second, self).__init__(parent)
 
+signal = np.random.randn(int(dur*sr))
+start = time.time()
+plt.figure()
+plt.plot(signal, 'k')
 
-class First(QMainWindow):
-    def __init__(self, parent=None):
-        super(First, self).__init__(parent)
-        self.pushButton = QPushButton("click me")
+# signal = resample(signal, down=2.5)
+# sr = 100
 
-        self.setCentralWidget(self.pushButton)
+signal = filter_data(signal, sr, 0, 1, verbose=0)
+plt.plot(signal, 'r')
+end = time.time()
+print(f'time elapsed: {end-start:.2f}')
+# print(signal)
 
-        self.pushButton.clicked.connect(self.on_pushButton_clicked)
-        self.dialog = Second(self)
-
-    def on_pushButton_clicked(self):
-        self.dialog.show()
-
-
-def main():
-    app = QApplication(sys.argv)
-    main = First()
-    main.show()
-    sys.exit(app.exec_())
-
-if __name__ == '__main__':
-    main()
+plt.show()

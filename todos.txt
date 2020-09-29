@@ -1,5 +1,0 @@
-
-- Gatherer::connect()
-	- can be connected=True although it doesnt actually work!
-	
-- TCP connection to libet halts the whole program -> use timeout smh?

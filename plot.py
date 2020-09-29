@@ -10,7 +10,7 @@ import matplotlib
 from matplotlib.figure import Figure
 matplotlib.use('Qt5Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-
+from mne.filter import filter_data
 # from callbacks import Callbacks
 
 class DataMonitor:
@@ -159,13 +159,15 @@ class DataMonitor:
 
 class HistMonitor:
     def __init__(self, sr, canvas, SCPTrialDuration=2.5, scpBaselineDuration=0.25, 
-            histCrit=5, figsize=(13,6), channelOfInterestIdx=None, blinder=1):
+            histCrit=5, channelOfInterestIdx=None, blinder=1):
         self.canvas = canvas
         self.sr = sr
         self.SCPTrialDuration = SCPTrialDuration
         self.scpBaselineDuration = scpBaselineDuration
         self.histCrit = histCrit
         self.package_size = None
+        # Data processing
+        self.filtfreq = (None, 1)
         # Data
         self.dataMemory = np.array([np.nan] * int(round(self.SCPTrialDuration*self.sr)))
         self.scpAveragesList = np.array([])
@@ -197,6 +199,8 @@ class HistMonitor:
         # Get data from gatherer:
         back_idx = int(self.SCPTrialDuration * self.sr)
         tmpSCP = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
+        # Filter the data
+        tmpSCP = filter_data(tmpSCP, self.sr, self.filtfreq[0], self.filtfreq[1])
         # Correct Baseline:
         tmpSCP -= np.mean(tmpSCP[0:int(self.scpBaselineDuration*self.sr)])
         # Save average

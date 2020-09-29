@@ -28,10 +28,14 @@ class TCP:
     def connect(self):
         if self.connected:
             print(f"Internal TCP connection is already established to {self.IP} {self.port}")
-            return
+            return True
         # try:
         print(f'Attempting connection to {self.IP} {self.port}...')
-        self.socket.bind((self.IP, self.port))
+        try:
+            self.socket.bind((self.IP, self.port))
+        except OSError:
+            print(f'\t...failed due to OSError. Possibly IP/port are invalid.')
+            return False
         self.socket.BufferSize = self.BufferSize
         self.socket.listen(1)
         self.accept_connection()
