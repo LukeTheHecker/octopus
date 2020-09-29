@@ -22,7 +22,7 @@ class Gather:
         # Data handling
         self.blocks_per_s = 50
         self.block_counter = 0
-        self.dataMemoryDurS = 11  # seconds of data memory
+        self.dataMemoryDurS = 10  # seconds of data memory
         self.block_dur_s = 1.0/self.blocks_per_s
         self.blockSize = None
         self.sr = None
@@ -138,7 +138,9 @@ class Gather:
                 endTime = time.time()
                 measuredLoopTime = endTime - self.startTime
                 calculatedEndTime = (self.theoreticalLooptime*(self.block-self.first_block_ever))  # (self.block_counter+1))
-                self.lag_s = calculatedEndTime - measuredLoopTime              
+                self.lag_s = calculatedEndTime - measuredLoopTime
+                if self.lag_s > 0.05:
+                    print(self.lag_s)
 
         elif msgtype == 3:
             # Stop message, terminate program
@@ -152,7 +154,11 @@ class Gather:
             return
         self.fresh_init()
         while True:
+            # start = time.time()*1000
             self.main()
+            # end = time.time()*1000
+            # print(f"time elapsed: {end-start:.1f} ms")
+            # time.sleep(0.05)
         # self.quit()
 
     def RecvData(self, requestedSize):
@@ -214,14 +220,26 @@ class Gather:
         # Extract eeg data as array of floats
         self.old_data = self.data.copy()
         self.data = []
+
         for i in range(self.points * self.channelCount):
             index = 12 + 4 * i
             value = unpack('<f', self.rawdata[index:index+4])
             self.data.append(value[0])
+
+        self.new_data = [list() for _ in range(self.channelCount)]
+
         # reshape into chan x timepoints
-        
+        chan_idx = np.arange(len(self.data)) % self.channelCount
+
+        for i, dat in enumerate(self.data):
+            self.new_data[chan_idx[i]].append(dat)
+        self.data = np.asarray(self.new_data)
+
+
+        # print(self.data)
         # print(f'self.data = {self.data}, len={len(self.data)}')
-        self.data = np.array(self.data).reshape(self.channelCount, self.blockSize)
+        # self.data = np.array(self.data).reshape(self.channelCount, int(len(self.data)/self.channelCount))
+        
         # value = value / self.channelCount
         self.block_counter += 1
         self.update_data()
@@ -274,3 +292,6 @@ class Marker:
         self.type = ""
         self.description = ""
 
+# gatherer = Gather()
+# gatherer.connect()
+# gatherer.gather_data()

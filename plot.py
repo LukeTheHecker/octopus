@@ -48,7 +48,7 @@ class DataMonitor:
         '''
         # Add title
         # Add axis labels
-        self.curve.setData(self.time, self.data_window*self.blinder, connect="finite")
+        # self.curve.setData(self.time, self.data_window*self.blinder, connect="finite")
         self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
         self.widget.setYRange(self.ylim[0], self.ylim[1], padding=0)
 

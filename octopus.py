@@ -8,13 +8,14 @@ from callbacks import Callbacks
 from gather import Gather
 from plot import DataMonitor, HistMonitor
 from gui import *
+from util import calc_error, gradient_descent
 from communication import StimulusCommunication
 import time
 import numpy as np
 import os
 import json
 import random
-from workers import Worker, SignallingWorker
+from workers import *
 
 class Octopus(QMainWindow, MainWindow):
     def __init__(self):
@@ -71,7 +72,6 @@ class Octopus(QMainWindow, MainWindow):
 
         # Objects 
         self.gatherer = Gather()
-        # self.gatherer.connect()
         self.callbacks.connectRDA()
         self.internal_tcp = StimulusCommunication(self)
         
@@ -88,7 +88,7 @@ class Octopus(QMainWindow, MainWindow):
         self.timer.start()
         
         self.plotTimer = QTimer()
-        self.plotTimer.setInterval(10)  # every 50 ms it is called
+        self.plotTimer.setInterval(10)  # every 10 ms it is called
         self.plotTimer.timeout.connect(self.data_monitor_update)
         self.plotTimer.start()
 
@@ -116,7 +116,9 @@ class Octopus(QMainWindow, MainWindow):
 
     def data_monitor_update(self):
         if self.plotsReady:
+            
             self.data_monitor.update(self.gatherer)
+            
 
     def GUI_routines(self):
         ''' Routines that are called using a timer ''' 
@@ -131,7 +133,6 @@ class Octopus(QMainWindow, MainWindow):
         if result:
             self.hist_monitor.button_press(self.gatherer)
             self.hist_monitor.plot_hist()
-
 
     def checkState(self, recent_response=False):
         ''' This method specifies the logic of the experiment.
@@ -252,6 +253,8 @@ class Octopus(QMainWindow, MainWindow):
         # spelling or workspace
         try:
             self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
+            # print(f"Selected Channel {self.channelOfInterestName} is in index {self.channelOfInterestIdx}")
+            # self.channelOfInterestIdx = 1
         except ValueError:
             print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
             print('Opening Gui again')
@@ -300,6 +303,45 @@ class Octopus(QMainWindow, MainWindow):
                 self.save()
             else:
                 self.load()
+
+    def EOGcorrection(self, name_eog, name_coi):
+        # 1) Record Data for 10 seconds
+        data = self.record_data(5)
+        # 2) Select EOG and channel of interest
+        idx_eog = self.gatherer.channelNames.index(name_eog)
+        idx_coi = self.gatherer.channelNames.index(name_coi)
+        EOG = data[idx_eog, :]
+        COI = data[idx_coi, :]
+        # 3) Estimate 'd'
+        print('\tCalc d...')
+        self.d_est = gradient_descent(calc_error, EOG, COI)
+        print('\t\t...done.')
+        return (EOG, COI, self.d_est)
+
+    def record_data(self, nsec):
+        print('\tRecording...')
+        time.sleep(nsec)
+        print('\t\t...done.')
+        return self.gatherer.dataMemory
+
+    def plot_eog_results(self, results):
+        print("\t...done.")
+        EOG, COI, self.d_est = results
+
+        plt.figure(num=42)
+        plt.subplot(311)
+        plt.plot(EOG)
+        plt.title("EOG")
+        plt.subplot(312)
+        plt.plot(COI)
+        plt.title("Channel of interest")
+        plt.subplot(313)
+        plt.plot(COI - (EOG * self.d_est))
+        title = f"Cleaned channel of interest with d={self.d_est}"
+        plt.title(title)
+        plt.tight_layout(pad=2)
+        plt.show()
+
 
 
 

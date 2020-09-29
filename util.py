@@ -1,6 +1,8 @@
 import numpy as np
 import time
 import ctypes
+from scipy.stats import pearsonr
+import random
 
 def insert(arr, piece):
     ''' Takes an array of values and a smaller array of values and 
@@ -44,6 +46,36 @@ def gui_retry_cancel(fun, text=('Connection could not be established.', 'Try aga
         fun()
     time.sleep(0.5)
     # fun()
+
+def calc_error(EOG, Cz, d):
+    error = abs(pearsonr(EOG, Cz - (EOG*d))[0])
+    return error
+
+def gradient_descent(fun, EOG, Cz, stepsize=0.005, max_iter=300):
+
+    d = random.uniform(-0.5, 0.5)
+    d_mem = [d]
+    cont = True
+    cnt = 0
+    while cont:
+        current_error = fun(EOG, Cz, d)
+        #print(f"current_error {current_error}")
+        error_to_the_left = fun(EOG, Cz, d-stepsize)
+        error_to_the_right = fun(EOG, Cz, d+stepsize)
+        if error_to_the_left > error_to_the_right:
+            d = d + stepsize
+        else:
+            d = d - stepsize     
+        d_mem.append(d)
+
+        if cnt > 3:
+            if d_mem[-3] == d_mem [-1] or cnt >= max_iter:
+                cont = False
+        cnt += 1  
+        # print(f"d changed to {d}") 
+    print(f"Required {cnt} iterations.")
+    return d
+	
 
 class Scheduler:
     def __init__(self, list_of_functions, start, interval):

@@ -1,11 +1,13 @@
-from socket import *
+from socket import AF_INET, SOCK_STREAM
+import socket
 from tcp import CustomSocket
 from util import gui_retry_cancel
 import select
+import time
 
 class TCP:
     def __init__(self, IP='192.168.2.122', port=5005, BufferSize=1024, \
-        encoding='utf-8', timeout=0.1):
+        encoding='utf-8', timeout=5):
         ''' This method creates an internal socket connection which enables 
         communication between this neurofeedback program and the libet stimulus
         presentation program. 
@@ -18,6 +20,7 @@ class TCP:
         self.encoding = encoding
         self.timeout = timeout
         self.socket = CustomSocket(AF_INET, SOCK_STREAM)
+        self.socket.settimeout(self.timeout)
         self.connected = False
         self.retryText = ('Try again?', 'Connection to TCP of Libet PC could not be established.')
         self.connect()
@@ -26,26 +29,29 @@ class TCP:
         if self.connected:
             print(f"Internal TCP connection is already established to {self.IP} {self.port}")
             return
+        # try:
+        print(f'Attempting connection to {self.IP} {self.port}...')
+        self.socket.bind((self.IP, self.port))
+        self.socket.BufferSize = self.BufferSize
+        self.socket.listen(1)
+        self.accept_connection()
+    
+    def accept_connection(self):
         try:
-            print(f'Attempting connection to {self.IP} {self.port}...')
-            self.socket.bind((self.IP, self.port))
-            self.socket.BufferSize = self.BufferSize
-            self.socket.listen(1)
-
-            self.con, addr = self.socket.accept()
+            self.con, _ = self.socket.accept()
             # Put Socket in non-blocking mode:
             self.con.setblocking(0)
             self.connected = True
             print("\t...done.")
             return True
+        except socket.timeout:
+            self.connected = False
+            print('\t...failed.')
+            return False
         except:
-            pass
-
-        self.connected = False
-        print('\t...failed.')
-        return False
-            # gui_retry_cancel(self.connect, self.retryText)
-            # print("\t...connection to Libet PC could not be established.")
+            self.connected = False
+            print('\t...failed.')
+            return False
 
     def quit(self):
         self.con.close()
@@ -100,7 +106,7 @@ class StimulusCommunication(TCP):
     
     def communication_routines(self):
         self.communicate_state()
-        respRequest = self.check_response()
+        respRequest = self.check_response()        
         if respRequest:
             return (True, True)
         else:
@@ -110,7 +116,7 @@ class StimulusCommunication(TCP):
         if self.con.fileno() == -1:
             return
 
-        ready = select.select([self.con], [], [], self.timeout)
+        ready = select.select([self.con], [], [], 0.05)
         response = b''
         if ready[0]:
             response = self.con.recv(self.BufferSize)
@@ -120,14 +126,14 @@ class StimulusCommunication(TCP):
     def quit(self):
         # Send message to libet presentation that the experiment is over
         self.con.setblocking(0)
-        self.communicate_state(val=self.communicate_quit_code)
+        self.communicate_state(val=self.octopus.communicate_quit_code)
 
         response = self.read_from_socket()
         
         
-        while int.from_bytes(response, "big") != self.communicate_quit_code**2:
+        while int.from_bytes(response, "big") != self.octopus.communicate_quit_code**2:
             print("waiting for libet to quit...")
-            self.communicate_state(val=self.communicate_quit_code)
+            self.communicate_state(val=self.octopus.communicate_quit_code)
             response = self.read_from_socket()
             time.sleep(0.1)
         print(f'Recieved response: {response}')

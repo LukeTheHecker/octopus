@@ -1,4 +1,6 @@
 import numpy as np
+import random
+from gui import SelectChannels
 
 
 class Callbacks:
@@ -16,6 +18,8 @@ class Callbacks:
         self.octopus.buttonbackwards.pressed.connect(self.statebackwards)
         self.octopus.buttonConnectRDA.pressed.connect(self.connectRDA)
         self.octopus.buttonConnectLibet.pressed.connect(self.connectLibet)
+        self.octopus.buttonEOGcorrection.pressed.connect(self.EOGcorrection)
+
 
     def presentToggle(self):
         self.allow_presentation = not self.allow_presentation
@@ -63,5 +67,11 @@ class Callbacks:
     
     def connectLibet(self):
         if hasattr(self.octopus, 'internal_tcp'):
-            self.octopus.internal_tcp.connect()
+            if not self.octopus.internal_tcp.connected:
+                self.octopus.internal_tcp.accept_connection()
+
+    def EOGcorrection(self):
+        self.mydialog = SelectChannels(self.octopus)
+        self.mydialog.show()
+
 # Lets design a button

@@ -5,6 +5,7 @@ from PyQt5.QtCore import *
 import pyqtgraph as pg
 from plot import MplCanvas
 import numpy as np
+from workers import *
 
 class MainWindow:
     ''' Main Window of the Octopus Neurofeedback App. '''
@@ -59,6 +60,8 @@ class MainWindow:
         self.buttonQuit = QPushButton("Quit")
         self.buttonforward = QPushButton("->")
         self.buttonbackwards = QPushButton("<-")
+        self.buttonEOGcorrection = QPushButton("EOG Correction")
+        
 
         self.buttonConnectRDA = QPushButton("Connect RDA")
         self.buttonConnectLibet = QPushButton("Connect Libet")
@@ -75,6 +78,8 @@ class MainWindow:
         button_layout.addWidget(self.buttonbackwards, 1, 0)
         button_layout.addWidget(self.buttonConnectRDA, 2, 1)
         button_layout.addWidget(self.buttonConnectLibet, 2, 2)
+        button_layout.addWidget(self.buttonEOGcorrection, 2, 0)
+
         # Plots title and textbox
         self.layout.addWidget(self.title, 0, 0, 1, 1)  # row pos, col pos, row span, col span
         self.layout.addWidget(self.graphWidget1, 1, 0,)
@@ -159,3 +164,43 @@ class InputDialog(QMainWindow):
         self.parent.run(settings)
 
 
+class SelectChannels(QWidget):
+    def __init__(self, octopus, parent=None):
+        super().__init__(parent)
+        
+        self.octopus = octopus
+        channelnames = self.octopus.gatherer.channelNames
+        
+        self.layout = QVBoxLayout()
+        self.cb1 = QComboBox()
+        self.cb2 = QComboBox()
+        self.buttonGO = QPushButton("GO")
+        
+
+        for channelname in channelnames:
+            self.cb1.addItem(channelname)
+            self.cb2.addItem(channelname)
+
+        self.layout.addWidget(self.cb1)
+        self.layout.addWidget(self.cb2)
+        self.layout.addWidget(self.buttonGO)
+
+        
+        
+
+        
+
+        self.buttonGO.pressed.connect(self.startThread)
+
+
+        self.setLayout(self.layout)
+        self.setWindowTitle("Select channels for EOG correction")
+
+    def startThread(self):
+        worker = EOGWorker(self.octopus.EOGcorrection, self.cb1.currentText(), self.cb2.currentText())
+        worker.signals.result.connect(self.octopus.plot_eog_results)  
+        print("Starting EOG Correction...")
+        self.octopus.threadpool.start(worker)
+
+        
+  
