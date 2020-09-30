@@ -126,7 +126,7 @@ class DataMonitor:
 
         
         if lagtime is not None:
-            self.title.setText(f'lag={lagtime:.1f}s')
+            self.title.setText(f'lag={abs(lagtime):.1f}s')
             
         self.blockMemory = IncomingBlockMemory
         self.blockCount += n_new_blocks
@@ -147,9 +147,6 @@ class DataMonitor:
         self.maxlims.append(hi)
         new_limits = (np.percentile(self.minlims, 5), np.percentile(self.maxlims, 95))
         return new_limits
-
-
-
 
     @staticmethod
     def firstNonNan(listfloats):
@@ -203,6 +200,12 @@ class HistMonitor:
         tmpSCP = filter_data(tmpSCP, self.sr, self.filtfreq[0], self.filtfreq[1])
         # Correct Baseline:
         tmpSCP -= np.mean(tmpSCP[0:int(self.scpBaselineDuration*self.sr)])
+
+        plt.figure()
+        time = np.arange(-self.SCPTrialDuration, 0, 1/self.sr)
+        plt.plot(time, tmpSCP*self.blinder)
+        plt.title("Slow cortical potential")
+        plt.show()
         # Save average
         self.scpAveragesList = np.append(self.scpAveragesList, np.mean(tmpSCP))
         

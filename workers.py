@@ -87,7 +87,9 @@ class SignallingWorker(QRunnable):
         '''
         while True:
             signal = self.fn(*self.args, **self.kwargs)
-            if signal[0]:
+            if int(signal[1]) == 42:
+                break
+            elif signal[0]:
                 self.signals.result.emit(signal[1])
 
 class EOGWorker(QRunnable):
@@ -127,7 +129,6 @@ class EOGWorker(QRunnable):
         '''
         Initialise the runner function with passed args, kwargs.
         '''
-        print(f"self.args={self.args}")
         signal = self.fn(*self.args, **self.kwargs)
 
         self.signals.result.emit(signal)

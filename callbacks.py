@@ -70,6 +70,8 @@ class Callbacks:
             if not self.octopus.internal_tcp.connected:
                 print(f'Attempting connection to {self.octopus.internal_tcp.IP} {self.octopus.internal_tcp.port}...')
                 self.octopus.internal_tcp.accept_connection()
+                if self.octopus.internal_tcp.connected:
+                    self.octopus.threadpool.start(self.worker_communication)
 
     def EOGcorrection(self):
         if self.octopus.gatherer.connected:

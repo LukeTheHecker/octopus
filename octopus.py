@@ -31,6 +31,7 @@ class Octopus(MainWindow):
         # Misc attributes
         self.targetMarker = 'response'
         self.communicate_quit_code = 2
+        self.EOGCorrectionDuration = 10
         self.d_est = None
         self.responded = False
         self.current_state = 0
@@ -76,15 +77,13 @@ class Octopus(MainWindow):
         self.callbacks.connectRDA()
         self.internal_tcp = StimulusCommunication(self)
         
-        
-
         # Data Monitors
         self.plotsReady = False
         self.init_plots()
 
         # Set timer for GUI-related tasks:
         self.timer = QTimer()
-        self.timer.setInterval(100)  # every 50 ms it is called
+        self.timer.setInterval(100)  # every 100 ms it is called
         self.timer.timeout.connect(self.GUI_routines)
         self.timer.start()
         
@@ -96,11 +95,12 @@ class Octopus(MainWindow):
         # Threading:
         self.worker_gatherer = Worker(self.gatherer.gather_data)
         self.worker_communication = SignallingWorker(self.internal_tcp.communication_routines)
-
+        self.worker_communication.signals.result.connect(self.response_triggered)  
+        
         self.threadpool = QThreadPool()
         self.threadpool.start(self.worker_gatherer)
         self.threadpool.start(self.worker_communication)
-        self.worker_communication.signals.result.connect(self.response_triggered)  
+        
     
     def init_plots(self):
         if self.gatherer.connected and self.internal_tcp.connected:
@@ -157,16 +157,7 @@ class Octopus(MainWindow):
             self.current_state += 1
 
         if self.current_state == 5 or self.callbacks.quit == True:
-            # Save experiment
-            #...
-            self.internal_tcp.quit()
-            # Quit experiment
-            print("Quitting...")
-            self.quit = True
-            self.gatherer.quit()
-            # self.internal_tcp.quit()
-            self.close()
-            # print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
+            self.closeAll()
 
         self.textBox.setText(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
         
@@ -221,8 +212,6 @@ class Octopus(MainWindow):
     def get_statelist(self):
         ''' Here the number and description of states will be defined.
         '''
-        n_states = 6
-        self.statelist = np.arange(n_states)
         self.stateDescription = ["Waiting for more data.",
             "Waiting for appropriate SCP of first condition.",
             "Interview for first condition.",
@@ -254,7 +243,7 @@ class Octopus(MainWindow):
         # spelling or workspace
         try:
             self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
-            # print(f"Selected Channel {self.channelOfInterestName} is in index {self.channelOfInterestIdx}")
+            print(f"Selected Channel {self.channelOfInterestName} is in index {self.channelOfInterestIdx}")
             # self.channelOfInterestIdx = 1
         except ValueError:
             print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
@@ -283,8 +272,8 @@ class Octopus(MainWindow):
             json.dump(json_file, f)
             
     def load(self):
-        if self.SubjectID != '':
-            return
+        # if self.SubjectID != '':
+        #     return
             
         filename = "states/" + self.SubjectID + '.json'
         if not os.path.isfile(filename):
@@ -307,9 +296,24 @@ class Octopus(MainWindow):
             else:
                 self.load()
 
+    def closeAll(self):
+        # Save experiment
+        print("stopping")
+        self.save()
+        # close routines
+        self.plotTimer.stop()
+        self.timer.stop()
+        self.internal_tcp.quit()
+        self.gatherer.quit()
+        # Quit experiment
+        self.quit = True
+        # self.internal_tcp.quit()
+        self.close()
+        # print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
+
     def EOGcorrection(self, name_eog, name_coi):
         # 1) Record Data for 10 seconds
-        data = self.record_data(5)
+        data = self.record_data(self.EOGCorrectionDuration)
         # 2) Select EOG and channel of interest
         idx_eog = self.gatherer.channelNames.index(name_eog)
         idx_coi = self.gatherer.channelNames.index(name_coi)
@@ -340,7 +344,7 @@ class Octopus(MainWindow):
         plt.title("Channel of interest")
         plt.subplot(313)
         plt.plot(COI - (EOG * self.d_est))
-        title = f"Cleaned channel of interest with d={self.d_est}"
+        title = f"Cleaned channel of interest with d={self.d_est:.2f}"
         plt.title(title)
         plt.tight_layout(pad=2)
         plt.show()

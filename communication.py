@@ -64,7 +64,17 @@ class StimulusCommunication(TCP):
     def __init__(self, octopus, **kwargs):
         super(StimulusCommunication, self).__init__(**kwargs)
         self.octopus = octopus
-
+    
+    def communication_routines(self):
+        self.communicate_state()
+        respRequest = self.check_response()        
+        if respRequest:
+            return (True, True)
+        elif not self.connected:
+            return (False, 42)
+        else:
+            return (False, False)
+    
     def check_response(self):
         ''' Receive response from participant through internal TCP connection with the 
             libet presentation
@@ -75,14 +85,16 @@ class StimulusCommunication(TCP):
         
         if self.con.fileno() != -1:
             # If connection is running
-            
-            msg_libet = self.read_from_socket()
-            if msg_libet.decode(self.encoding) == self.octopus.targetMarker or self.octopus.targetMarker in msg_libet.decode(self.encoding):
-                print('Response!')                
-                self.octopus.checkState(recent_response=True)
-                return True
-            else:
-                return False
+            try:
+                msg_libet = self.read_from_socket()
+                if msg_libet.decode(self.encoding) == self.octopus.targetMarker or self.octopus.targetMarker in msg_libet.decode(self.encoding):
+                    print('Response!')                
+                    self.octopus.checkState(recent_response=True)
+                    return True
+                else:
+                    return False
+            except OSError as err:
+                print("Connection probably closed")
         else:
             return
     
@@ -98,23 +110,18 @@ class StimulusCommunication(TCP):
             return
 
         if val is None:
-            # Send Current state (allow or forbid) to the libet presentation
-            allow_presentation = self.octopus.callbacks.allow_presentation
-            msg = int(allow_presentation).to_bytes(1, byteorder='big')
-            self.con.send(msg)
-            # print(f'sent {int(allow_presentation)} to libet PC')
+            try:
+                # Send Current state (allow or forbid) to the libet presentation
+                allow_presentation = self.octopus.callbacks.allow_presentation
+                msg = int(allow_presentation).to_bytes(1, byteorder='big')
+                self.con.send(msg)
+                # print(f'sent {int(allow_presentation)} to libet PC')
+            except OSError as err:
+                print("Connection probably closed")
         else:
             msg = int(val).to_bytes(1, byteorder='big')
             self.con.send(msg)
             # print(f'sent {int(val)} to libet PC')  
-    
-    def communication_routines(self):
-        self.communicate_state()
-        respRequest = self.check_response()        
-        if respRequest:
-            return (True, True)
-        else:
-            return (False, False)
     
     def read_from_socket(self):
         if self.con.fileno() == -1:
@@ -128,6 +135,10 @@ class StimulusCommunication(TCP):
         return response
     
     def quit(self):
+        self.connected = False
+        self.con.close()
+    
+    def communicateQuit(self):
         # Send message to libet presentation that the experiment is over
         self.con.setblocking(0)
         self.communicate_state(val=self.octopus.communicate_quit_code)
