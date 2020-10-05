@@ -61,9 +61,13 @@ class Callbacks:
         if hasattr(self.octopus, 'gatherer'):
             result = self.octopus.gatherer.connect()
         else:
-            return
+            return False
+
         if result:
             self.octopus.handleChannelIndex() 
+            self.octopus.fillChannelDropdown()
+            self.octopus.init_plots()
+        return result
     
     def connectLibet(self):
         if hasattr(self.octopus, 'internal_tcp'):
@@ -77,6 +81,7 @@ class Callbacks:
         if self.octopus.gatherer.connected:
             self.mydialog = SelectChannels(self.octopus)
             self.mydialog.show()
-        print('EOG correction is not possible until gatherer is connected to RDA.')
+        else:
+            print('EOG correction is not possible until gatherer is connected to RDA.')
 
 # Lets design a button

@@ -42,11 +42,9 @@ class Octopus(MainWindow):
     def open_settings_gui(self):
         self.mydialog = InputDialog(self)
         self.mydialog.show()
-        # self.SubjectID = input("Enter ID: ") 
     
-    def run(self, settings):
-        ''' When settings are entered, save them in the octopus.'''
-        # Handle Inputs
+    def saveSettings(self, settings):
+        ''' Save the settings entered by the User on startup of the program.'''
         self.SubjectID = settings['SubjectID']
         self.channelOfInterestName = settings['channelOfInterestName']
         self.SCPTrialDuration = float(settings['SCPTrialDuration'])
@@ -55,9 +53,7 @@ class Octopus(MainWindow):
         self.secondInterviewDelay = int(settings['secondInterviewDelay'])
         self.blindedAxis = bool(settings['blindedAxis'])
 
-        # Add title to datamonitor plot
-        title = f"EEG: {self.channelOfInterestName}"
-        self.graphWidget1.setTitle(title, color="k", size="10pt")
+    def setBlinding(self):
         # blinding
         if self.blindedAxis:
             # Blind Plots by randomly inverting amplitudes
@@ -65,8 +61,18 @@ class Octopus(MainWindow):
         else:
             # No blinding
             self.blinder = 1
-        print("settings saved to octopus")
 
+    def run(self, settings):
+        ''' When settings are entered, save them in the octopus.'''
+        # Save the settings
+        self.saveSettings(settings)
+        # Set Blinding
+        self.setBlinding()
+        
+        # Add title to datamonitor plot
+        title = f"EEG: {self.channelOfInterestName}"
+        self.graphWidget1.setTitle(title, color="k", size="10pt")
+        
         # Load subject data in case of a crash
         self.load()
         
@@ -74,7 +80,8 @@ class Octopus(MainWindow):
 
         # Objects 
         self.gatherer = Gather()
-        self.callbacks.connectRDA()
+        connectionSuccessful = self.callbacks.connectRDA()
+        
         self.internal_tcp = StimulusCommunication(self)
         
         # Data Monitors
@@ -101,7 +108,6 @@ class Octopus(MainWindow):
         self.threadpool.start(self.worker_gatherer)
         self.threadpool.start(self.worker_communication)
         
-    
     def init_plots(self):
         if self.gatherer.connected and self.internal_tcp.connected:
             self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
@@ -119,8 +125,12 @@ class Octopus(MainWindow):
         if self.plotsReady:
             
             self.data_monitor.update(self.gatherer)
+    
+    def fillChannelDropdown(self):
+        ''' Fill the channel dropdown menu with channel names yielded from the gatherer.'''
+        for channelname in self.gatherer.channelNames:
+            self.channel_dropdown.addItem(channelname)
             
-
     def GUI_routines(self):
         ''' Routines that are called using a timer ''' 
         if self.plotsReady:
@@ -272,8 +282,7 @@ class Octopus(MainWindow):
             json.dump(json_file, f)
             
     def load(self):
-        # if self.SubjectID != '':
-        #     return
+        ''' Check if subject is already in folder and ask whether the data should be loaded.'''
             
         filename = "states/" + self.SubjectID + '.json'
         if not os.path.isfile(filename):
@@ -311,19 +320,17 @@ class Octopus(MainWindow):
         self.close()
         # print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
 
-    def EOGcorrection(self, name_eog, name_coi):
+    def EOGcorrection(self, name_eog):
         # 1) Record Data for 10 seconds
         data = self.record_data(self.EOGCorrectionDuration)
         # 2) Select EOG and channel of interest
         idx_eog = self.gatherer.channelNames.index(name_eog)
-        idx_coi = self.gatherer.channelNames.index(name_coi)
         EOG = data[idx_eog, :]
-        COI = data[idx_coi, :]
         # 3) Estimate 'd'
         print('\tCalc d...')
-        self.d_est = gradient_descent(calc_error, EOG, COI)
+        self.d_est = [gradient_descent(calc_error, EOG, data[idx, :]) for idx in range(len(self.gatherer.channelNames))]
         print('\t\t...done.')
-        return (EOG, COI, self.d_est)
+        return (data, idx_eog)
 
     def record_data(self, nsec):
         print('\tRecording...')
@@ -333,8 +340,10 @@ class Octopus(MainWindow):
 
     def plot_eog_results(self, results):
         print("\t...done.")
-        EOG, COI, self.d_est = results
-
+        data, idx_eog = results
+        EOG = data[idx_eog, :]
+        COI = data[self.channelOfInterestIdx, :]
+        d = self.d_est[self.channelOfInterestIdx]
         plt.figure(num=42)
         plt.subplot(311)
         plt.plot(EOG)
@@ -343,8 +352,8 @@ class Octopus(MainWindow):
         plt.plot(COI)
         plt.title("Channel of interest")
         plt.subplot(313)
-        plt.plot(COI - (EOG * self.d_est))
-        title = f"Cleaned channel of interest with d={self.d_est:.2f}"
+        plt.plot(COI - (EOG * d))
+        title = f"Cleaned channel of interest with d={d:.2f}"
         plt.title(title)
         plt.tight_layout(pad=2)
         plt.show()

@@ -59,10 +59,9 @@ class Gather:
             self.con.connect((self.ip, self.port))
             self.connected = True
             # Perform main loop until parameters like sr are there.
-            cnt = 0
-            while (self.blockSize is None or self.sr is None) and cnt < 10:
+            while self.blockSize is None or self.sr is None:
                 self.main()
-                cnt += 1
+                
             if self.blockSize is None or self.sr is None:
                 print('\t...failed.')
                 self.connected = False

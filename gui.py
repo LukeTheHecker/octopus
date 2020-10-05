@@ -28,20 +28,7 @@ class MainWindow(QMainWindow):
         
         pen = pg.mkPen(color='r', width=2)
         self.curve1 = self.graphWidget1.plot(pen=pen)
-        # self.curve1.setData([1, 2, 3, 4], [5, 7, 4, 1])
-        # Styling
-        # self.graphWidget1.plotItem.getAxis('left').setPen(pen)
-        # self.graphWidget1.plotItem.getAxis('bottom').setPen(pen)
-        # self.graphWidget1.setBackground((255, 255, 255))
-        # self.curve1.setData([1, 2, 3], [3, 3, 2], width=0.1)
-        # font=QFont("Times", 10)
-        # font.setPixelSize(10)
-        # self.graphWidget1.getAxis("bottom").setStyle(tickFont = font)
-        # self.graphWidget1.getAxis("bottom").setStyle(tickTextOffset = 20)
-        # labelstyle = {'color': (0, 0, 0), 'font-size': '14pt'}
-        # self.graphWidget1.getAxis("bottom").setLabel("text", units='mV', **labelstyle)
-        # self.graphWidget1.getAxis("left").setStyle(tickFont = font)
-        # self.graphWidget1.getAxis("left").setStyle(tickTextOffset = 20)
+
 
         # Title
         self.title = QLabel()
@@ -49,11 +36,12 @@ class MainWindow(QMainWindow):
         self.title.setFont(QFont("Times", 12))
         # Bottom Graph
         self.MplCanvas = MplCanvas(self, width=5, height=4, dpi=100)
-        # self.MplCanvas.ax.hist(np.random.randn(1000))
         # Add label
         self.textBox = QLabel()
         self.textBox.setText("State=")
         self.textBox.setFont(QFont("Times", 14))
+        # Add channel dropdown
+        self.channel_dropdown = QComboBox()
         # Add buttons
         self.buttonPresentationcontrol = QPushButton("Allow")
         self.buttonPresentationcontrol.setStyleSheet("background-color: red")
@@ -65,11 +53,7 @@ class MainWindow(QMainWindow):
 
         self.buttonConnectRDA = QPushButton("Connect RDA")
         self.buttonConnectLibet = QPushButton("Connect Libet")
-
         
-        
-        # Layout
-        self.layout = QGridLayout()
         # Button Group
         button_layout = QGridLayout()
         button_layout.addWidget(self.buttonPresentationcontrol, 0, 0, 1, 3)
@@ -79,9 +63,17 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.buttonConnectRDA, 2, 1)
         button_layout.addWidget(self.buttonConnectLibet, 2, 2)
         button_layout.addWidget(self.buttonEOGcorrection, 2, 0)
+        # Lag and channel dropdown thing
+        second_head_layout = QGridLayout()
+        second_head_layout.addWidget(self.title, 0, 0)
+        second_head_layout.addWidget(self.channel_dropdown, 0, 1)
+        # button_layout2 = QGridLayout()
+        # button_layout2.addWidget(self.buttonPresentationcontrol, 0, 0, 1, 3)
+        # button_layout2.addWidget(self.buttonQuit, 1, 2)
 
-        # Plots title and textbox
-        self.layout.addWidget(self.title, 0, 0, 1, 1)  # row pos, col pos, row span, col span
+        # Layout
+        self.layout = QGridLayout()
+        self.layout.addLayout(second_head_layout, 0, 0)  # row pos, col pos, row span, col span
         self.layout.addWidget(self.graphWidget1, 1, 0,)
         self.layout.addWidget(self.MplCanvas, 2, 0)
         self.layout.addWidget(self.textBox, 1, 2)
@@ -182,32 +174,28 @@ class SelectChannels(QWidget):
         channelnames = self.octopus.gatherer.channelNames
         
         self.layout = QVBoxLayout()
+        self.text = QLabel()
+        self.text.setText('Choose the VEOG channel')
         self.cb1 = QComboBox()
-        self.cb2 = QComboBox()
+        # self.cb2 = QComboBox()
         self.buttonGO = QPushButton("GO")
-        
 
         for channelname in channelnames:
             self.cb1.addItem(channelname)
-            self.cb2.addItem(channelname)
+            # self.cb2.addItem(channelname)
 
+        self.layout.addWidget(self.text)
         self.layout.addWidget(self.cb1)
         self.layout.addWidget(self.cb2)
         self.layout.addWidget(self.buttonGO)
 
-        
-        
-
-        
-
         self.buttonGO.pressed.connect(self.startThread)
-
 
         self.setLayout(self.layout)
         self.setWindowTitle("Select channels for EOG correction")
 
     def startThread(self):
-        worker = EOGWorker(self.octopus.EOGcorrection, self.cb1.currentText(), self.cb2.currentText())
+        worker = EOGWorker(self.octopus.EOGcorrection, self.cb1.currentText())
         worker.signals.result.connect(self.octopus.plot_eog_results)  
         print("Starting EOG Correction...")
         self.octopus.threadpool.start(worker)
