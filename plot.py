@@ -16,7 +16,7 @@ from mne.filter import filter_data
 class DataMonitor:
    
     def __init__(self, sr, block_size, curve, widget, window_len_s=10, figsize=(13,6), ylim=(-100, 100), 
-        title=None, viewChannel=None, eogChannelIndex=None, blinder=1):
+        title=None, viewChannel=None, EOGChannelIndex=None, blinder=1):
         print('DataMonitor initialized')
         # Basic Settings
         self.sr = sr
@@ -36,7 +36,7 @@ class DataMonitor:
         self.ylim = ylim
         self.tolerance = 0.6
         self.viewChannel = viewChannel
-        self.eogChannelIndex = eogChannelIndex
+        self.EOGChannelIndex = EOGChannelIndex
         # Blinding the direction of the effect:
         self.blinder = blinder
         # Data structures
@@ -53,7 +53,7 @@ class DataMonitor:
         self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
         self.widget.setYRange(self.ylim[0], self.ylim[1], padding=0)
 
-    def update(self, gatherer, d_est):
+    def update(self, gatherer, d_est, viewChannel):
         ''' This method takes a data_package and plots it at the appropriate position in the data monitor plot
         Parameters:
         -----------
@@ -62,11 +62,14 @@ class DataMonitor:
         Return:
         -------
         '''
+        if viewChannel is not None:
+            self.viewChannel = viewChannel
+
         if not gatherer.connected:
             return
         self.viewChannelIndex = gatherer.channelNames.index(self.viewChannel)
         dataMemory = gatherer.dataMemory[self.viewChannelIndex, :]
-        eogMemory = gatherer.dataMemory[self.eogChannelIndex, :]
+        eogMemory = gatherer.dataMemory[self.EOGChannelIndex, :]
         # Correct EOG
         dataMemory = dataMemory - (eogMemory * d_est[self.viewChannelIndex])
         IncomingBlockMemory = gatherer.blockMemory
@@ -79,7 +82,6 @@ class DataMonitor:
 
         if np.max(IncomingBlockMemory) == np.max(self.blockMemory):
             # all blocks have been plotted
-            # print('all blocks have been plotted')
             return
 
         new_blocks = np.arange(np.max(self.blockMemory) + 1, np.max(self.blockMemory) + 1 + n_new_blocks).astype(int)
@@ -108,10 +110,10 @@ class DataMonitor:
 
         # If one window is full, start again on left side
         if new_win: # and self.blockCount != 0:
-            # print("starting new window")
+            self.widget.enableAutoRange('y', False)
             self.time = np.linspace(self.n_window*self.window_len_s, (self.n_window + 1)*self.window_len_s, self.window_size)
             # New x and y limits
-            new_limits = self.decide_ylimits()
+            # new_limits = self.decide_ylimits()
 
             # Handle discontinuities in the data
             con = np.isfinite(self.data_window)
@@ -119,7 +121,7 @@ class DataMonitor:
             # Plot
             self.curve.setData(self.time, self.data_window*self.blinder, connect=np.logical_and(con, np.roll(con, -1)))
             self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
-            self.widget.setYRange(*new_limits, padding=0)
+            # self.widget.setYRange(*new_limits, padding=0)
 
             self.n_window += 1
         else:
@@ -160,7 +162,7 @@ class DataMonitor:
 
 class HistMonitor:
     def __init__(self, sr, canvas, SCPTrialDuration=2.5, scpBaselineDuration=0.25, 
-            histCrit=5, channelOfInterestIdx=None, eogChannelIndex = None, blinder=1):
+            histCrit=5, channelOfInterestIdx=None, EOGChannelIndex = None, blinder=1):
         self.canvas = canvas
         self.sr = sr
         self.SCPTrialDuration = SCPTrialDuration
@@ -168,13 +170,13 @@ class HistMonitor:
         self.histCrit = histCrit
         self.package_size = None
         # Data processing
-        self.filtfreq = (None, 1)
+        self.filtfreq = (None, 0.5)
         # Data
         self.dataMemory = np.array([np.nan] * int(round(self.SCPTrialDuration*self.sr)))
         self.scpAveragesList = np.array([])
         self.n_responses = len(self.scpAveragesList)
         self.channelOfInterestIdx = channelOfInterestIdx
-        self.eogChannelIndex = eogChannelIndex
+        self.EOGChannelIndex = EOGChannelIndex
         # Figure
         self.initialize_figure()
         # Blinding the direction of the effect:
@@ -202,7 +204,7 @@ class HistMonitor:
         back_idx = int(self.SCPTrialDuration * self.sr)
         tmpSCP = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
         # Correct eye artifacts
-        EOG = gatherer.dataMemory[self.eogChannelIndex, -back_idx:]
+        EOG = gatherer.dataMemory[self.EOGChannelIndex, -back_idx:]
         tmpSCP = tmpSCP - (EOG * d_est[self.channelOfInterestIdx])
         # Filter the data
         tmpSCP = filter_data(tmpSCP, self.sr, self.filtfreq[0], self.filtfreq[1])
@@ -261,7 +263,7 @@ class BaseNeuroFeedback:
         args/kwargs : lists/dict, variable arguments for the ProcessFunction
         '''
 
-        self.BlocksProcessed = 0
+        self.BlocksProcessed = 1
         self.BlocksVisualized = 0
         self.ProcessFunction = ProcessFunction
         self.timeRangeProcessed = timeRangeProcessed
@@ -274,15 +276,15 @@ class BaseNeuroFeedback:
         self.kwargs = kwargs
     
     def calibrate(self, dataMemory, blockMemory):
-        print("Calibrating...")
-        if all(np.isnan(dataMemory[:10])):
+        if all(blockMemory[:10] == -1 ):
             return
+        print("enough data to calibrate!")
         dataMemoryDurS = len(blockMemory) * self.blockDurS
         numberOfChunks = dataMemoryDurS / self.timeRangeProcessed
         # Get dataMemory in consistent shape
         dataMemory = self.handleDataInput(dataMemory)
         # Calculate properties of the data (e.g. sampling rate)
-        self.calculate_data_properties(self, dataMemory)
+        self.calculate_data_properties(dataMemory, blockMemory)
         # Create chunks of the whole data Memory to process individually
         # Ensure the dataMemory is evenly divisible by numberOfChunks:
         while dataMemory.shape[1] % numberOfChunks != 0:
@@ -310,24 +312,26 @@ class BaseNeuroFeedback:
         # Get dataMemory in consistent shape
         dataMemory = self.handleDataInput(dataMemory)
         # Calculate properties of the data (e.g. sampling rate)
-        self.calculate_data_properties(self, dataMemory)
-
+        self.calculate_data_properties(dataMemory, blockMemory)
         if blockMemory[-1] < self.BlocksProcessed + self.minNumberOfBlocks:
             # not enough data blocks available to start next processing
             return (False, False)
         # Extract data
-        currentData = self.extract_current_data()
+        currentData = self.extract_current_data(dataMemory, blockMemory)
 
         score = self.ProcessFunction(currentData, *self.args, **self.kwargs)
 
-        self.BlocksProcessed += 1
+        self.BlocksProcessed = blockMemory[-1]
         result = (score, self.ylim)
         return (True, result)
 
-    def extract_current_data(self, blockMemory):
-        newBlocks = (self.BlocksProcessed, blockMemory[-1])
+    def extract_current_data(self, dataMemory, blockMemory):
+        blockMemory = list(blockMemory)
+        newBlocks = (self.BlocksProcessed, int(blockMemory[-1]))
+        print(f"new blocks={newBlocks}")
         newBlocksIndices = (blockMemory.index(newBlocks[0]), blockMemory.index(newBlocks[1]))
-        currentData = self.dataMemory[self.indicesOfInterest, newBlocksIndices[0]:newBlocksIndices[1]]
+
+        currentData = dataMemory[self.indicesOfInterest, newBlocksIndices[0]:newBlocksIndices[1]]
         return currentData
 
     def calculate_data_properties(self, dataMemory, blockMemory):
@@ -335,7 +339,6 @@ class BaseNeuroFeedback:
             self.sr = (dataMemory.shape[1] / len(blockMemory)) / self.blockDurS
             self.blockSize = self.blockDurS * self.sr
             self.numberOfElectrodes = dataMemory.shape[0]
-            print(f"sr = {self.sr}\nblockSize = {self.blockSize}")
             if self.indicesOfInterest is None:
                 self.indicesOfInterest = np.arange(self.numberOfElectrodes)
     

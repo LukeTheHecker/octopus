@@ -30,6 +30,7 @@ class Octopus(MainWindow):
         self.open_settings_gui()
         
         # Misc attributes
+        self.threadpool = QThreadPool()
         self.targetMarker = 'response'
         self.communicate_quit_code = 2
         self.EOGCorrectionDuration = 10
@@ -50,6 +51,7 @@ class Octopus(MainWindow):
         self.channelOfInterestName = settings['channelOfInterestName']
         self.viewChannel = deepcopy(self.channelOfInterestName)
         self.refChannels = ["".join(s.split()) for s in settings['refChannels'].split(',')]
+        self.EOGChannelName = settings['EOGChannelName']
         self.SCPTrialDuration = float(settings['SCPTrialDuration'])
         self.SCPBaselineDuration = float(settings['SCPBaselineDuration'])
         self.histCrit = int(settings['histCrit'])
@@ -106,20 +108,25 @@ class Octopus(MainWindow):
         self.worker_communication = SignallingWorker(self.internal_tcp.communication_routines)
         self.worker_communication.signals.result.connect(self.response_triggered)  
         
-        self.threadpool = QThreadPool()
+        
         self.threadpool.start(self.worker_gatherer)
         self.threadpool.start(self.worker_communication)
         
     def init_plots(self):
+        if not hasattr(self, 'gatherer'):
+            return
+        if not hasattr(self, 'internal_tcp'):
+            return
+
         if self.gatherer.connected and self.internal_tcp.connected:
             self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
                 curve=self.curve1, widget=self.graphWidget1, title=self.title, 
-                viewChannel=self.viewChannel, eogChannelIndex=self.eogChannelIndex,
+                viewChannel=self.viewChannel, EOGChannelIndex=self.EOGChannelIndex,
                 blinder=self.blinder)
             
             self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
                 SCPTrialDuration=self.SCPTrialDuration, histCrit=self.histCrit,
-                channelOfInterestIdx=self.channelOfInterestIdx, eogChannelIndex=self.eogChannelIndex,
+                channelOfInterestIdx=self.channelOfInterestIdx, EOGChannelIndex=self.EOGChannelIndex,
                 blinder=self.blinder)
             self.plotsReady = True
         else:
@@ -196,9 +203,9 @@ class Octopus(MainWindow):
             condition = self.conds[key]
 
             if condition == 'Positive':
-                self.go_interview = last_scp > avg_scp + sd_scp
+                self.go_interview = (last_scp > avg_scp + sd_scp) and (last_scp > 0)
             elif condition == 'Negative':
-                self.go_interview = last_scp < avg_scp - sd_scp
+                self.go_interview = (last_scp < avg_scp - sd_scp) and (last_scp < 0)
 
             # Save how many trials it took until the first interview was started
             self.trials_until_first_interview = n_scps
@@ -213,9 +220,9 @@ class Octopus(MainWindow):
                 self.go_interview = False
             else:
                 if condition == 'Positive':
-                    self.go_interview = last_scp > avg_scp + sd_scp
+                    self.go_interview = (last_scp > avg_scp + sd_scp) and (last_scp > 0)
                 elif condition == 'Negative':
-                    self.go_interview = last_scp < avg_scp - sd_scp
+                    self.go_interview = (last_scp < avg_scp - sd_scp) and (last_scp < 0)
 
         if not self.go_interview and n_scps < self.histCrit:
             print("Too few trials to start interview.")
@@ -263,19 +270,6 @@ class Octopus(MainWindow):
             print('Opening Gui again')
             self.open_settings_gui()
 
-    def startNeurofeedbacks(self):
-        channelsOfInterest = ['Oz']
-        indicesOfInterest = [self.gatherer.channelNames.index(chan) for chan in channelsOfInterest]
-        freqs = (8, 13)  # low and high frequency for the bandpass filter
-        sr = self.gatherer.sr
-        self.NF_alpha = BaseNeuroFeedback(freq_band_power, freqs, sr, timeRangeProcessed=0.25, 
-            blocksPerSecond=self.gatherer.blocks_per_s, indicesOfInterest=indicesOfInterest)
-        
-        self.NF_worker = SignallingWorker(self.NF_alpha.update)
-        self.NF_worker.signals.result.connect(self.plotFreqBandNeurofeedback)  
-        self.threadpool.start(self.NF_worker)
-
-
     def save(self):
         ''' Save the current state of the experiment. 
         (not finished)
@@ -289,7 +283,7 @@ class Octopus(MainWindow):
                 'current_state':int(self.current_state), 
                 'SubjectID': self.SubjectID,
                 'cond_order': self.cond_order,
-                'd_est': self.d_est}
+                'd_est': list(self.d_est)}
 
         json_file = json.dumps(State)
 
@@ -341,10 +335,18 @@ class Octopus(MainWindow):
         data = self.record_data(self.EOGCorrectionDuration)
         # 2) Select EOG and channel of interest
         idx_eog = self.gatherer.channelNames.index(name_eog)
+        print(f"name of selected EOG channel: {name_eog}, idx={idx_eog}")
         EOG = data[idx_eog, :]
+        # 2.1) Scale EOG to be roughly equal to the other signal
+        rms_coi = np.sqrt(np.mean(np.square(data[self.channelOfInterestIdx, :]))) 
+        rms_eog = np.sqrt(np.mean(np.square(data[idx_eog, :]))) 
+        scaler = rms_coi / rms_eog
+
         # 3) Estimate 'd'
         print('\tCalc d...')
-        self.d_est = [gradient_descent(calc_error, EOG, data[idx, :]) for idx in range(len(self.gatherer.channelNames))]
+        self.d_est = [gradient_descent(calc_error, EOG*scaler, data[idx, :]) for idx in range(len(self.gatherer.channelNames))]
+        self.d_est = [i*scaler for i in self.d_est]
+
         print('\t\t...done.')
         return (data, idx_eog)
 
@@ -358,6 +360,8 @@ class Octopus(MainWindow):
         print("\t...done.")
         data, idx_eog = results
         EOG = data[idx_eog, :]
+        
+        print(f'channelOfInterestIdx={self.channelOfInterestIdx}; self.channelOfInterestName={self.channelOfInterestName}')
         COI = data[self.channelOfInterestIdx, :]
         d = self.d_est[self.channelOfInterestIdx]
         plt.figure(num=42)
@@ -366,24 +370,39 @@ class Octopus(MainWindow):
         plt.title("EOG")
         plt.subplot(312)
         plt.plot(COI)
-        plt.title("Channel of interest")
+        plt.title(f"Channel of interest ({self.channelOfInterestName})")
         plt.subplot(313)
         plt.plot(COI - (EOG * d))
         title = f"Cleaned channel of interest with d={d:.2f}"
         plt.title(title)
         plt.tight_layout(pad=2)
         plt.show()
+    
+    def startNeurofeedbacks(self):
+        channelsOfInterest = ['Cz']
+        indicesOfInterest = [self.gatherer.channelNames.index(chan) for chan in channelsOfInterest]
+        freqs = (8, 13)  # low and high frequency for the bandpass filter
+        sr = self.gatherer.sr
+        self.NF_alpha = BaseNeuroFeedback(freq_band_power, freqs, sr, timeRangeProcessed=0.25, 
+            blocksPerSecond=self.gatherer.blocks_per_s, indicesOfInterest=indicesOfInterest)
+        
+        self.NF_worker = SignallingWorker(self.update_alpha_neurofeedback)
+        self.NF_worker.signals.result.connect(self.plotFreqBandNeurofeedback)  
+        self.threadpool.start(self.NF_worker)
+
+    def update_alpha_neurofeedback(self):
+        result = self.NF_alpha.update(self.gatherer.dataMemory, self.gatherer.blockMemory)
+        return result
 
     def plotFreqBandNeurofeedback(self, result):
         # plot the frequency band power on a canvas
         score, ylim = result
-        canvas = self.barGraph 
         
-        self.canvas.ax.cla()
+        self.barGraph.ax.cla()
 
         self.hist = self.barGraph.ax.bar(0, score)   
-        self.canvas.ax.set_xlabel('Alpha Power')
-        self.canvas.ax.set_ylim(ylim)        
+        self.barGraph.ax.set_xlabel('Alpha Power')
+        self.barGraph.ax.set_ylim(ylim)        
 
 
 

@@ -30,7 +30,7 @@ class Gather:
         # Preprocessing
         self.refChannels = None
         # Here the block number will be assigned to each piece of data in dataMemory
-        self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
+        self.blockMemory = np.array([-1] * self.blocks_per_s * self.dataMemoryDurS)
         self.startTime = None
         self.lag_s = None
         self.lastBlock = -1
@@ -73,6 +73,7 @@ class Gather:
             return True
         except:
             pass
+
         self.connected = False
         print('\t...failed.')
         return False
@@ -80,7 +81,7 @@ class Gather:
         
     def fresh_init(self):
         ''' Re-Do connection right before experiment.'''
-        self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
+        self.blockMemory = np.array([-1] * self.blocks_per_s * self.dataMemoryDurS)
         self.block_counter = 0
         self.dataMemory = np.empty((self.channelCount, self.dataMemorySize))
         self.dataMemory[:] = np.nan
@@ -243,7 +244,7 @@ class Gather:
 
         for i, dat in enumerate(self.data):
             self.new_data[chan_idx[i]].append(dat)
-        self.data = np.asarray(self.new_data)
+        self.data = np.array(self.new_data)
         # Preprocessing (rereferencing, ...)
         self.preprocess_data()
 
@@ -279,10 +280,14 @@ class Gather:
         # return (self.block, self.points, self.markerCount, self.data, self.markers)
     
     def preprocess_data(self):
-        # Baseline correction
+        # rereferencing
         if self.refChannels is not None:
             self.refChannelsIndices = [self.channelNames.index(i) for i in self.refChannels]
-            self.data -= np.mean(self.data[self.refChannelsIndices, :], axis=1)
+            # loop through channels
+            for i in range(self.data.shape[0]):
+                if self.channelNames[i] == 'VEOG':
+                    continue
+                self.data[i, :] -= np.mean(self.data[self.refChannelsIndices, :], axis=0)
 
     def update_data(self):
         ''' Collect new data and add it to the data memory.
@@ -296,6 +301,7 @@ class Gather:
         assert self.blockSize == len(self.data.flatten()) / self.channelCount, "blockSize is supposed to be {} but data was of size {}".format(self.blockSize, len(self.data))
         self.dataMemory = insert(self.dataMemory, self.data)
         self.blockMemory = insert(self.blockMemory, self.block_counter)
+        self.blockMemory = np.squeeze(self.blockMemory)
 
     def quit(self):
         self.con.close()

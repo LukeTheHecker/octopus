@@ -1,6 +1,7 @@
 import numpy as np
 import time
 import ctypes
+from pyqtgraph.functions import interpolateArray
 
 from scipy.stats import pearsonr
 from scipy.signal import periodogram
@@ -56,12 +57,13 @@ def calc_error(EOG, Cz, d):
     error = abs(pearsonr(EOG, Cz - (EOG*d))[0])
     return error
 
-def gradient_descent(fun, EOG, Cz, stepsize=0.005, max_iter=300):
+def gradient_descent(fun, EOG, Cz, stepsize=0.05, max_iter=10000, maxStepDec=3):
 
     d = random.uniform(-0.5, 0.5)
     d_mem = [d]
     cont = True
     cnt = 0
+    numberOfDecreasedStepsizes = 0
     while cont:
         current_error = fun(EOG, Cz, d)
         #print(f"current_error {current_error}")
@@ -74,14 +76,23 @@ def gradient_descent(fun, EOG, Cz, stepsize=0.005, max_iter=300):
         d_mem.append(d)
 
         if cnt > 3:
-            if d_mem[-3] == d_mem [-1] or cnt >= max_iter:
-                cont = False
+            if cnt >= max_iter: # or d_mem[-3] == d_mem [-1] or:
+                numberOfDecreasedStepsizes += 1
+                stepsize /= 2
+                max_iter += 100
+                print(f'decreased stepsize to {stepsize}')
+                if numberOfDecreasedStepsizes >= maxStepDec:
+                    cont = False
         cnt += 1  
-        # print(f"d changed to {d}") 
+        # print(f"cnt {cnt}: d changed to {d}") 
     print(f"Required {cnt} iterations.")
     return d
 
 def bandpower(x, fs, fmin, fmax):
+
+    if any(np.isnan(x)):
+        x = interp_nans(x)
+
     f, Pxx = periodogram(x, fs=fs)
     ind_min = argmax(f > fmin) - 1
     ind_max = argmax(f > fmax) - 1
@@ -98,7 +109,9 @@ def freq_band_power(data, freqs, sr):
     
     Return:
     -------
-    meanScoreList : average frequency band power across selected channels.'''
+    meanScoreList : average frequency band power across selected channels.
+
+    '''
 
     if type(data) == list:
         data = np.array(data)
@@ -113,7 +126,27 @@ def freq_band_power(data, freqs, sr):
     
     return meanScoreList
          
+def nan_helper(y):
+    """Helper to handle indices and logical indices of NaNs.
 
+    Input:
+        - y, 1d numpy array with possible NaNs
+    Output:
+        - nans, logical indices of NaNs
+        - index, a function, with signature indices= index(logical_indices),
+          to convert logical indices of NaNs to 'equivalent' indices
+    Example:
+        >>> # linear interpolation of NaNs
+        >>> nans, x= nan_helper(y)
+        >>> y[nans]= np.interp(x(nans), x(~nans), y[~nans])
+    """
+
+    return np.isnan(y), lambda z: z.nonzero()[0]
+
+def interp_nans(y):
+    nans, x= nan_helper(y)
+    y[nans] = np.interp(x(nans), x(~nans), y[~nans])
+    return y
 
 class Scheduler:
     def __init__(self, list_of_functions, start, interval):

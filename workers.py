@@ -87,9 +87,10 @@ class SignallingWorker(QRunnable):
         '''
         while True:
             signal = self.fn(*self.args, **self.kwargs)
-            if int(signal[1]) == 42:
-                break
-            elif signal[0]:
+            if type(signal[1]) == bool or type(signal[1]) == int or type(signal[1]) == float:
+                if int(signal[1]) == 42:
+                    break
+            if signal[0]:
                 self.signals.result.emit(signal[1])
 
 class EOGWorker(QRunnable):

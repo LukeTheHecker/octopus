@@ -65,11 +65,12 @@ class Callbacks:
 
         if result:
             self.octopus.gatherer.refChannels = self.octopus.refChannels
-            self.octopus.eogChannelIndex = [self.octopus.gatherer.channelNames.index(chan) for chan in self.octopus.refChannels]
-            self.d_est = np.zeros(len(self.octopus.gatherer.channelNames))
+            self.octopus.EOGChannelIndex = self.octopus.gatherer.channelNames.index(self.octopus.EOGChannelName)
+            self.octopus.d_est = np.zeros(len(self.octopus.gatherer.channelNames))
             self.octopus.handleChannelIndex() 
             self.octopus.fillChannelDropdown()
             self.octopus.init_plots()
+            # self.octopus.startNeurofeedbacks()
             
         return result
     

@@ -28,6 +28,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('Octopus Neurofeedback')
         # Data monitor Graph
         self.graphWidget1 = pg.PlotWidget()
+        self.graphWidget1.enableAutoRange('y', False)
         pen = pg.mkPen(color='r', width=2)
         self.curve1 = self.graphWidget1.plot(pen=pen)
         # Title
@@ -108,8 +109,9 @@ class InputDialog(QMainWindow):
         button_box  = QDialogButtonBox(QDialogButtonBox.Ok)
 
         self.SubjectID = QLineEdit("", self)
-        self.channelOfInterestName = QLineEdit("RP", self)
+        self.channelOfInterestName = QLineEdit("Cz", self)
         self.refChannels = QLineEdit("TP9, TP10", self)
+        self.EOGChannelName = QLineEdit("VEOG", self)
         self.SCPTrialDuration = QLineEdit("2.5", self)
         self.SCPBaselineDuration = QLineEdit("0.20", self)
         self.histCrit = QLineEdit("5", self)
@@ -121,6 +123,7 @@ class InputDialog(QMainWindow):
         self.layout.addRow("User ID", self.SubjectID)
         self.layout.addRow("SCP Channel", self.channelOfInterestName)
         self.layout.addRow("Reference Channels", self.refChannels)
+        self.layout.addRow("VEOG Channel", self.EOGChannelName)
         verticalSpacer = QSpacerItem(0, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.layout.addItem(verticalSpacer)
         self.layout.addRow("SCP dur in seconds", self.SCPTrialDuration)
@@ -148,6 +151,7 @@ class InputDialog(QMainWindow):
         settings = {'SubjectID': self.SubjectID.text(),
                     'channelOfInterestName': self.channelOfInterestName.text(),
                     'refChannels': self.refChannels.text(),
+                    'EOGChannelName': self.EOGChannelName.text(),
                     'SCPTrialDuration': self.SCPTrialDuration.text(),
                     'SCPBaselineDuration': self.SCPBaselineDuration.text(),
                     'histCrit': self.histCrit.text(),
@@ -193,11 +197,9 @@ class SelectChannels(QWidget):
 
         for channelname in channelnames:
             self.cb1.addItem(channelname)
-            # self.cb2.addItem(channelname)
 
         self.layout.addWidget(self.text)
         self.layout.addWidget(self.cb1)
-        self.layout.addWidget(self.cb2)
         self.layout.addWidget(self.buttonGO)
 
         self.buttonGO.pressed.connect(self.startThread)
@@ -210,6 +212,7 @@ class SelectChannels(QWidget):
         worker.signals.result.connect(self.octopus.plot_eog_results)  
         print("Starting EOG Correction...")
         self.octopus.threadpool.start(worker)
+        self.close()
 
         
   
