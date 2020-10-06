@@ -1,8 +1,13 @@
 import numpy as np
 import time
 import ctypes
+
 from scipy.stats import pearsonr
+from scipy.signal import periodogram
+from scipy import argmax, trapz
+
 import random
+from mne.filter import filter_data
 
 def insert(arr, piece):
     ''' Takes an array of values and a smaller array of values and 
@@ -75,7 +80,40 @@ def gradient_descent(fun, EOG, Cz, stepsize=0.005, max_iter=300):
         # print(f"d changed to {d}") 
     print(f"Required {cnt} iterations.")
     return d
-	
+
+def bandpower(x, fs, fmin, fmax):
+    f, Pxx = periodogram(x, fs=fs)
+    ind_min = argmax(f > fmin) - 1
+    ind_max = argmax(f > fmax) - 1
+    return trapz(Pxx[ind_min: ind_max], f[ind_min: ind_max])
+
+
+def freq_band_power(data, freqs, sr):
+    ''' Simple function to calculate the frequency band power for a set of electrodes.
+    Paramters:
+    ----------
+    data : list/numpy.ndarray, 1- or 2-D data.
+    freqs : list/tuple, highpass cutoff and lowpass cutoff frequency in a list/tuple
+    sr : int, sampling rate
+    
+    Return:
+    -------
+    meanScoreList : average frequency band power across selected channels.'''
+
+    if type(data) == list:
+        data = np.array(data)
+    if len(data.shape) == 1:
+        data = np.expand_dims(data, axis=0)
+    scoreList = []
+    # loop through all electrodes
+    for elec in range(data.shape[0]):
+        # Calculate score
+        scoreList.append(bandpower(data[elec, :], sr, *freqs))
+    meanScoreList = np.mean(scoreList)
+    
+    return meanScoreList
+         
+
 
 class Scheduler:
     def __init__(self, list_of_functions, start, interval):

@@ -6,9 +6,9 @@ import pyqtgraph as pg
 import matplotlib.pyplot as plt
 from callbacks import Callbacks
 from gather import Gather
-from plot import DataMonitor, HistMonitor
+from plot import DataMonitor, HistMonitor, BaseNeuroFeedback
 from gui import *
-from util import calc_error, gradient_descent
+from util import calc_error, gradient_descent, freq_band_power
 from communication import StimulusCommunication
 import time
 import numpy as np
@@ -16,6 +16,7 @@ import os
 import json
 import random
 from workers import *
+from copy import deepcopy
 
 class Octopus(MainWindow):
     def __init__(self):
@@ -32,7 +33,7 @@ class Octopus(MainWindow):
         self.targetMarker = 'response'
         self.communicate_quit_code = 2
         self.EOGCorrectionDuration = 10
-        self.d_est = None
+        self.d_est = np.zeros(100)
         self.responded = False
         self.current_state = 0
         self.get_statelist()
@@ -47,12 +48,14 @@ class Octopus(MainWindow):
         ''' Save the settings entered by the User on startup of the program.'''
         self.SubjectID = settings['SubjectID']
         self.channelOfInterestName = settings['channelOfInterestName']
+        self.viewChannel = deepcopy(self.channelOfInterestName)
+        self.refChannels = ["".join(s.split()) for s in settings['refChannels'].split(',')]
         self.SCPTrialDuration = float(settings['SCPTrialDuration'])
         self.SCPBaselineDuration = float(settings['SCPBaselineDuration'])
         self.histCrit = int(settings['histCrit'])
         self.secondInterviewDelay = int(settings['secondInterviewDelay'])
         self.blindedAxis = bool(settings['blindedAxis'])
-
+        
     def setBlinding(self):
         # blinding
         if self.blindedAxis:
@@ -80,8 +83,7 @@ class Octopus(MainWindow):
 
         # Objects 
         self.gatherer = Gather()
-        connectionSuccessful = self.callbacks.connectRDA()
-        
+        self.callbacks.connectRDA()
         self.internal_tcp = StimulusCommunication(self)
         
         # Data Monitors
@@ -112,19 +114,20 @@ class Octopus(MainWindow):
         if self.gatherer.connected and self.internal_tcp.connected:
             self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
                 curve=self.curve1, widget=self.graphWidget1, title=self.title, 
-                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
+                viewChannel=self.viewChannel, eogChannelIndex=self.eogChannelIndex,
+                blinder=self.blinder)
             
             self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
                 SCPTrialDuration=self.SCPTrialDuration, histCrit=self.histCrit,
-                channelOfInterestIdx=self.channelOfInterestIdx, blinder=self.blinder)
+                channelOfInterestIdx=self.channelOfInterestIdx, eogChannelIndex=self.eogChannelIndex,
+                blinder=self.blinder)
             self.plotsReady = True
         else:
             self.plotsReady = False
 
     def data_monitor_update(self):
         if self.plotsReady:
-            
-            self.data_monitor.update(self.gatherer)
+            self.data_monitor.update(self.gatherer, self.d_est, self.viewChannel)
     
     def fillChannelDropdown(self):
         ''' Fill the channel dropdown menu with channel names yielded from the gatherer.'''
@@ -142,7 +145,7 @@ class Octopus(MainWindow):
     def response_triggered(self, result):
         ''' This function is called whenever the participant presses the button.'''
         if result:
-            self.hist_monitor.button_press(self.gatherer)
+            self.hist_monitor.button_press(self.gatherer, self.d_est)
             self.hist_monitor.plot_hist()
 
     def checkState(self, recent_response=False):
@@ -260,6 +263,19 @@ class Octopus(MainWindow):
             print('Opening Gui again')
             self.open_settings_gui()
 
+    def startNeurofeedbacks(self):
+        channelsOfInterest = ['Oz']
+        indicesOfInterest = [self.gatherer.channelNames.index(chan) for chan in channelsOfInterest]
+        freqs = (8, 13)  # low and high frequency for the bandpass filter
+        sr = self.gatherer.sr
+        self.NF_alpha = BaseNeuroFeedback(freq_band_power, freqs, sr, timeRangeProcessed=0.25, 
+            blocksPerSecond=self.gatherer.blocks_per_s, indicesOfInterest=indicesOfInterest)
+        
+        self.NF_worker = SignallingWorker(self.NF_alpha.update)
+        self.NF_worker.signals.result.connect(self.plotFreqBandNeurofeedback)  
+        self.threadpool.start(self.NF_worker)
+
+
     def save(self):
         ''' Save the current state of the experiment. 
         (not finished)
@@ -358,7 +374,16 @@ class Octopus(MainWindow):
         plt.tight_layout(pad=2)
         plt.show()
 
+    def plotFreqBandNeurofeedback(self, result):
+        # plot the frequency band power on a canvas
+        score, ylim = result
+        canvas = self.barGraph 
+        
+        self.canvas.ax.cla()
 
+        self.hist = self.barGraph.ax.bar(0, score)   
+        self.canvas.ax.set_xlabel('Alpha Power')
+        self.canvas.ax.set_ylim(ylim)        
 
 
 

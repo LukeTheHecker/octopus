@@ -13,23 +13,23 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         self.setFixedSize(1000, 600)
         # Create App Window
-        # self.mainWidget = QWidget()
-        # self.setCentralWidget(self.mainWidget)
+        # Tabs
+        # Initialize tab screen
+        self.tabs = QTabWidget()
+        self.tabMain = QGroupBox(self)
+        self.tabNeuroFeedback = QGroupBox(self)
+        self.tabs.addTab(self.tabMain,"Main")
+        self.tabs.addTab(self.tabNeuroFeedback,"Neurofeedback")
         # Icon
         self.setWindowIcon(QIcon('assets/octoicon.svg'))
-        # label = QLabel(self)
-        # pixmap = QPixmap('assets/octoicon.svg')
-        # label.setPixmap(pixmap)
 
+        # Main Tab
         # Title
         self.setWindowTitle('Octopus Neurofeedback')
         # Data monitor Graph
         self.graphWidget1 = pg.PlotWidget()
-        
         pen = pg.mkPen(color='r', width=2)
         self.curve1 = self.graphWidget1.plot(pen=pen)
-
-
         # Title
         self.title = QLabel()
         self.title.setText("Lag")
@@ -49,8 +49,6 @@ class MainWindow(QMainWindow):
         self.buttonforward = QPushButton("->")
         self.buttonbackwards = QPushButton("<-")
         self.buttonEOGcorrection = QPushButton("EOG Correction")
-        
-
         self.buttonConnectRDA = QPushButton("Connect RDA")
         self.buttonConnectLibet = QPushButton("Connect Libet")
         
@@ -82,10 +80,20 @@ class MainWindow(QMainWindow):
         self.layout.setColumnStretch(1, 0.5)
         self.layout.setRowStretch(0, 0.5)
 
+        self.tabMain.setLayout(self.layout)
 
-        box = QGroupBox(self)
-        box.setLayout(self.layout)
-        self.setCentralWidget(box)
+        # Neurofeedback Tab
+        self.layoutNF = QGridLayout()
+        self.barGraph = MplCanvas(self, width=5, height=4, dpi=100)
+        self.layoutNF.addWidget(self.barGraph, 0, 0)
+        self.tabNeuroFeedback.setLayout(self.layoutNF)
+
+
+        
+        
+
+        
+        self.setCentralWidget(self.tabs)
         # self.mainWidget.setLayout(self.layout)
     
 class InputDialog(QMainWindow):
@@ -101,6 +109,7 @@ class InputDialog(QMainWindow):
 
         self.SubjectID = QLineEdit("", self)
         self.channelOfInterestName = QLineEdit("RP", self)
+        self.refChannels = QLineEdit("TP9, TP10", self)
         self.SCPTrialDuration = QLineEdit("2.5", self)
         self.SCPBaselineDuration = QLineEdit("0.20", self)
         self.histCrit = QLineEdit("5", self)
@@ -111,6 +120,7 @@ class InputDialog(QMainWindow):
 
         self.layout.addRow("User ID", self.SubjectID)
         self.layout.addRow("SCP Channel", self.channelOfInterestName)
+        self.layout.addRow("Reference Channels", self.refChannels)
         verticalSpacer = QSpacerItem(0, 10, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.layout.addItem(verticalSpacer)
         self.layout.addRow("SCP dur in seconds", self.SCPTrialDuration)
@@ -137,6 +147,7 @@ class InputDialog(QMainWindow):
     def getInputs(self):
         settings = {'SubjectID': self.SubjectID.text(),
                     'channelOfInterestName': self.channelOfInterestName.text(),
+                    'refChannels': self.refChannels.text(),
                     'SCPTrialDuration': self.SCPTrialDuration.text(),
                     'SCPBaselineDuration': self.SCPBaselineDuration.text(),
                     'histCrit': self.histCrit.text(),

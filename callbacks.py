@@ -19,7 +19,7 @@ class Callbacks:
         self.octopus.buttonConnectRDA.pressed.connect(self.connectRDA)
         self.octopus.buttonConnectLibet.pressed.connect(self.connectLibet)
         self.octopus.buttonEOGcorrection.pressed.connect(self.EOGcorrection)
-
+        self.octopus.channel_dropdown.currentIndexChanged.connect(self.change_view_channel)
 
     def presentToggle(self):
         self.allow_presentation = not self.allow_presentation
@@ -28,7 +28,7 @@ class Callbacks:
     def quitexperiment(self):
         print("pressed")
         self.quit=True
-        self.octopus.current_state = 5
+        self.octopus.closeAll()
 
     def stateforward(self):
         self.stateChange = 1
@@ -64,9 +64,13 @@ class Callbacks:
             return False
 
         if result:
+            self.octopus.gatherer.refChannels = self.octopus.refChannels
+            self.octopus.eogChannelIndex = [self.octopus.gatherer.channelNames.index(chan) for chan in self.octopus.refChannels]
+            self.d_est = np.zeros(len(self.octopus.gatherer.channelNames))
             self.octopus.handleChannelIndex() 
             self.octopus.fillChannelDropdown()
             self.octopus.init_plots()
+            
         return result
     
     def connectLibet(self):
@@ -79,9 +83,13 @@ class Callbacks:
 
     def EOGcorrection(self):
         if self.octopus.gatherer.connected:
+            print('Starting EOG Correction')
             self.mydialog = SelectChannels(self.octopus)
             self.mydialog.show()
         else:
             print('EOG correction is not possible until gatherer is connected to RDA.')
 
-# Lets design a button
+    def change_view_channel(self):
+        print(f'Changed viewchannel for data monitor from {self.octopus.viewChannel} to {self.octopus.channel_dropdown.currentText()}')
+        self.octopus.viewChannel = self.octopus.channel_dropdown.currentText()
+        

@@ -16,7 +16,7 @@ from mne.filter import filter_data
 class DataMonitor:
    
     def __init__(self, sr, block_size, curve, widget, window_len_s=10, figsize=(13,6), ylim=(-100, 100), 
-        title=None, channelOfInterestIdx=None, blinder=1):
+        title=None, viewChannel=None, eogChannelIndex=None, blinder=1):
         print('DataMonitor initialized')
         # Basic Settings
         self.sr = sr
@@ -35,7 +35,8 @@ class DataMonitor:
         self.title = title
         self.ylim = ylim
         self.tolerance = 0.6
-        self.channelOfInterestIdx = channelOfInterestIdx
+        self.viewChannel = viewChannel
+        self.eogChannelIndex = eogChannelIndex
         # Blinding the direction of the effect:
         self.blinder = blinder
         # Data structures
@@ -52,7 +53,7 @@ class DataMonitor:
         self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
         self.widget.setYRange(self.ylim[0], self.ylim[1], padding=0)
 
-    def update(self, gatherer):
+    def update(self, gatherer, d_est):
         ''' This method takes a data_package and plots it at the appropriate position in the data monitor plot
         Parameters:
         -----------
@@ -63,8 +64,11 @@ class DataMonitor:
         '''
         if not gatherer.connected:
             return
-
-        dataMemory = gatherer.dataMemory[self.channelOfInterestIdx, :]
+        self.viewChannelIndex = gatherer.channelNames.index(self.viewChannel)
+        dataMemory = gatherer.dataMemory[self.viewChannelIndex, :]
+        eogMemory = gatherer.dataMemory[self.eogChannelIndex, :]
+        # Correct EOG
+        dataMemory = dataMemory - (eogMemory * d_est[self.viewChannelIndex])
         IncomingBlockMemory = gatherer.blockMemory
         lagtime = gatherer.lag_s
 
@@ -156,7 +160,7 @@ class DataMonitor:
 
 class HistMonitor:
     def __init__(self, sr, canvas, SCPTrialDuration=2.5, scpBaselineDuration=0.25, 
-            histCrit=5, channelOfInterestIdx=None, blinder=1):
+            histCrit=5, channelOfInterestIdx=None, eogChannelIndex = None, blinder=1):
         self.canvas = canvas
         self.sr = sr
         self.SCPTrialDuration = SCPTrialDuration
@@ -170,6 +174,7 @@ class HistMonitor:
         self.scpAveragesList = np.array([])
         self.n_responses = len(self.scpAveragesList)
         self.channelOfInterestIdx = channelOfInterestIdx
+        self.eogChannelIndex = eogChannelIndex
         # Figure
         self.initialize_figure()
         # Blinding the direction of the effect:
@@ -190,12 +195,15 @@ class HistMonitor:
         self.canvas.ax.set_ylabel('Amplitude [microvolt]')
                 
         
-    def button_press(self, gatherer):
+    def button_press(self, gatherer, d_est):
         ''' If a button was pressed append the average baseline corrected SCP to a list.
         '''
         # Get data from gatherer:
         back_idx = int(self.SCPTrialDuration * self.sr)
         tmpSCP = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
+        # Correct eye artifacts
+        EOG = gatherer.dataMemory[self.eogChannelIndex, -back_idx:]
+        tmpSCP = tmpSCP - (EOG * d_est[self.channelOfInterestIdx])
         # Filter the data
         tmpSCP = filter_data(tmpSCP, self.sr, self.filtfreq[0], self.filtfreq[1])
         # Correct Baseline:
@@ -238,6 +246,122 @@ class HistMonitor:
         self.canvas.ax.set_title(self.title, fontsize=14)
         self.canvas.draw()
 
+class BaseNeuroFeedback:
+    ''' Process data and plot it on a canvas.'''
+    def __init__(self, ProcessFunction, *args, timeRangeProcessed=0.25, 
+        blocksPerSecond=50, indicesOfInterest=None,
+        **kwargs):
+        ''' 
+        Parameters:
+        -----------
+        ProcessFunction : function, function with which the data will be processed.
+        timeRangeProcessed : float, time in seconds 
+        blocksPerSecond : int, number of blocks per second (given by Brain Vision RDA)
+        indicesOfInterest : list, indices of electrodes on which the metric should be calculated
+        args/kwargs : lists/dict, variable arguments for the ProcessFunction
+        '''
+
+        self.BlocksProcessed = 0
+        self.BlocksVisualized = 0
+        self.ProcessFunction = ProcessFunction
+        self.timeRangeProcessed = timeRangeProcessed
+        self.blocksPerSecond = blocksPerSecond
+        self.indicesOfInterest = indicesOfInterest
+        self.blockDurS = 1 / float(blocksPerSecond)
+        self.minNumberOfBlocks = int(round(self.blocksPerSecond * self.timeRangeProcessed))
+        self.ylim = None
+        self.args = args
+        self.kwargs = kwargs
+    
+    def calibrate(self, dataMemory, blockMemory):
+        print("Calibrating...")
+        if all(np.isnan(dataMemory[:10])):
+            return
+        dataMemoryDurS = len(blockMemory) * self.blockDurS
+        numberOfChunks = dataMemoryDurS / self.timeRangeProcessed
+        # Get dataMemory in consistent shape
+        dataMemory = self.handleDataInput(dataMemory)
+        # Calculate properties of the data (e.g. sampling rate)
+        self.calculate_data_properties(self, dataMemory)
+        # Create chunks of the whole data Memory to process individually
+        # Ensure the dataMemory is evenly divisible by numberOfChunks:
+        while dataMemory.shape[1] % numberOfChunks != 0:
+            numberOfChunks -= 1
+        dataChunks = np.split(dataMemory[self.indicesOfInterest, :], numberOfChunks, axis=1)
+        # Process the chunks
+        scoreList = [self.ProcessFunction(chunk, *self.args, **self.kwargs) for chunk in dataChunks]
+        # Finally, extract y limits
+        self.ylim = (np.min(scoreList), np.max(scoreList))
+        print("\t...done.")
+
+
+    def update(self, dataMemory, blockMemory):
+        ''' Process new data 
+        Parameters:
+        -----------
+        dataMemory : list/numpy.ndarray, array of data points of a single 
+        blockMemory : ist/numpy.ndarray, array of block indices
+        '''
+        # Check if Neurofeedback has been calibrated:
+        if self.ylim is None:
+            self.calibrate(dataMemory, blockMemory)
+            if self.ylim is None:
+                return (False, False)
+        # Get dataMemory in consistent shape
+        dataMemory = self.handleDataInput(dataMemory)
+        # Calculate properties of the data (e.g. sampling rate)
+        self.calculate_data_properties(self, dataMemory)
+
+        if blockMemory[-1] < self.BlocksProcessed + self.minNumberOfBlocks:
+            # not enough data blocks available to start next processing
+            return (False, False)
+        # Extract data
+        currentData = self.extract_current_data()
+
+        score = self.ProcessFunction(currentData, *self.args, **self.kwargs)
+
+        self.BlocksProcessed += 1
+        result = (score, self.ylim)
+        return (True, result)
+
+    def extract_current_data(self, blockMemory):
+        newBlocks = (self.BlocksProcessed, blockMemory[-1])
+        newBlocksIndices = (blockMemory.index(newBlocks[0]), blockMemory.index(newBlocks[1]))
+        currentData = self.dataMemory[self.indicesOfInterest, newBlocksIndices[0]:newBlocksIndices[1]]
+        return currentData
+
+    def calculate_data_properties(self, dataMemory, blockMemory):
+        if self.BlocksProcessed == 0:
+            self.sr = (dataMemory.shape[1] / len(blockMemory)) / self.blockDurS
+            self.blockSize = self.blockDurS * self.sr
+            self.numberOfElectrodes = dataMemory.shape[0]
+            print(f"sr = {self.sr}\nblockSize = {self.blockSize}")
+            if self.indicesOfInterest is None:
+                self.indicesOfInterest = np.arange(self.numberOfElectrodes)
+    
+    @staticmethod
+    def handleDataInput(dataMemory):
+        ''' Re-configures the dataMemory input to fulfill the following conditions:
+        * must be of type numpy.ndarray
+        * must be of dimension 2: channels X time points
+        Parameters:
+        -----------
+        dataMemory : list/numpy.ndarray of data points
+        
+        Return:
+        -------
+        dataMemory : 2D numpy.ndarray
+        '''
+
+        if type(dataMemory) == list:
+            dataMemory = np.array(dataMemory)
+        if len(dataMemory.shape) == 1:
+            dataMemory = np.expand_dims(dataMemory, axis=0)
+        
+        return dataMemory
+
+
+        
 
 class Buttons:
     def __init__(self, fig, callbacks):

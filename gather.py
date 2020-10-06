@@ -26,6 +26,9 @@ class Gather:
         self.block_dur_s = 1.0/self.blocks_per_s
         self.blockSize = None
         self.sr = None
+
+        # Preprocessing
+        self.refChannels = None
         # Here the block number will be assigned to each piece of data in dataMemory
         self.blockMemory = [-1] * self.blocks_per_s * self.dataMemoryDurS
         self.startTime = None
@@ -241,7 +244,8 @@ class Gather:
         for i, dat in enumerate(self.data):
             self.new_data[chan_idx[i]].append(dat)
         self.data = np.asarray(self.new_data)
-
+        # Preprocessing (rereferencing, ...)
+        self.preprocess_data()
 
         # print(self.data)
         # print(self.data.shape)
@@ -273,6 +277,12 @@ class Gather:
             index = index + markersize[0]
 
         # return (self.block, self.points, self.markerCount, self.data, self.markers)
+    
+    def preprocess_data(self):
+        # Baseline correction
+        if self.refChannels is not None:
+            self.refChannelsIndices = [self.channelNames.index(i) for i in self.refChannels]
+            self.data -= np.mean(self.data[self.refChannelsIndices, :], axis=1)
 
     def update_data(self):
         ''' Collect new data and add it to the data memory.
