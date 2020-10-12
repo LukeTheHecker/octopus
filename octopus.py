@@ -1,6 +1,7 @@
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
+from matplotlib.pyplot import axes
 import pyqtgraph as pg
 
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ from callbacks import Callbacks
 from gather import Gather, DummyGather
 from plot import DataMonitor, HistMonitor, BaseNeuroFeedback
 from gui import *
+from neuroFeedbackViz import BarPlotAnimation, circleAnimation
 from util import calc_error, gradient_descent, freq_band_power
 from communication import StimulusCommunication
 import time
@@ -18,6 +20,8 @@ import random
 from workers import *
 from copy import deepcopy
 from scipy.signal import detrend
+
+from nolds import dfa
 
 class Octopus(MainWindow):
     def __init__(self):
@@ -100,7 +104,7 @@ class Octopus(MainWindow):
         self.timer.start()
         
         self.plotTimer = QTimer()
-        self.plotTimer.setInterval(10)  # every 10 ms it is called
+        self.plotTimer.setInterval(20)  # every 20 ms it is called
         self.plotTimer.timeout.connect(self.data_monitor_update)
         self.plotTimer.start()
 
@@ -133,7 +137,7 @@ class Octopus(MainWindow):
                 channelOfInterestIdx=self.channelOfInterestIdx,
                 EOGChannelIndex=self.EOGChannelIndex, blinder=self.blinder)
 
-            # self.startNeurofeedbacks()
+            self.startNeurofeedbacks()
             self.plotsReady = True
         else:
             self.plotsReady = False
@@ -141,6 +145,9 @@ class Octopus(MainWindow):
     def data_monitor_update(self):
         if self.plotsReady:
             self.data_monitor.update(self.gatherer, self.d_est, self.viewChannel)
+        else:
+            # Plots not ready - sleep a bit!
+            time.sleep(0.25)
     
     def fillChannelDropdown(self):
         ''' Fill the channel dropdown menu with channel names yielded from the gatherer.'''
@@ -153,6 +160,7 @@ class Octopus(MainWindow):
             self.save()
             self.checkState()
         else:
+            time.sleep(0.25)
             self.init_plots()
 
     def response_triggered(self, result):
@@ -380,45 +388,48 @@ class Octopus(MainWindow):
         print(f'channelOfInterestIdx={self.channelOfInterestIdx}; self.channelOfInterestName={self.channelOfInterestName}')
         COI = data[self.channelOfInterestIdx, :]
         d = self.d_est[self.channelOfInterestIdx]
+
+        minlim = np.min( [np.min(EOG), np.min(COI - (EOG * d)), np.min(COI)] )
+        maxlim = np.max( [np.max(EOG), np.max(COI - (EOG * d)), np.max(COI)] )
+        ylim = (minlim, maxlim)
+
+        error_uncleaned = calc_error(EOG, COI, 0)
+        error_cleaned = calc_error(EOG, COI, d)
+
         plt.figure(num=42)
         plt.subplot(311)
         plt.plot(EOG)
+        plt.ylim(ylim)
         plt.title("EOG")
         plt.subplot(312)
         plt.plot(COI)
+        plt.ylim(ylim)
         plt.title(f"Channel of interest ({self.channelOfInterestName})")
         plt.subplot(313)
         plt.plot(COI - (EOG * d))
-        title = f"Cleaned channel of interest with d={d:.2f}"
+        plt.ylim(ylim)
+        title = f"Cleaned COI with d={d:.2f}. Reduced corr from {error_uncleaned:.2f} to {error_cleaned:.2f}"
         plt.title(title)
         plt.tight_layout(pad=2)
         plt.show()
-    
+
     def startNeurofeedbacks(self):
-        channelsOfInterest = ['Cz']
-        indicesOfInterest = [self.gatherer.channelNames.index(chan) for chan in channelsOfInterest]
+        # Frequency Band Power Neurofeedback:
+        channelsOfInterest = ['Cz', 'TP9']
         freqs = (8, 13)  # low and high frequency for the bandpass filter
         sr = self.gatherer.sr
-        self.NF_alpha = BaseNeuroFeedback(freq_band_power, freqs, sr, timeRangeProcessed=0.25, 
-            blocksPerSecond=self.gatherer.blocks_per_s, indicesOfInterest=indicesOfInterest)
-        
-        self.NF_worker = SignallingWorker(self.update_alpha_neurofeedback)
-        self.NF_worker.signals.result.connect(self.plotFreqBandNeurofeedback)  
-        self.threadpool.start(self.NF_worker)
+        fun = freq_band_power
+        self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, freqs, sr, timeRangeProcessed=0.25, 
+            channelsOfInterest=channelsOfInterest)
 
-    def update_alpha_neurofeedback(self):
-        result = self.NF_alpha.update(self.gatherer.dataMemory, self.gatherer.blockMemory)
-        return result
+        # Detrended Fluctuation Analysis Exponent
+        # channelsOfInterest = ['Cz']
+        # fun = dfa
+        # self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, timeRangeProcessed=0.25, 
+        #     channelsOfInterest=channelsOfInterest, fit_exp='poly')
 
-    def plotFreqBandNeurofeedback(self, result):
-        # plot the frequency band power on a canvas
-        score, ylim = result
-        
-        self.barGraph.ax.cla()
-
-        self.hist = self.barGraph.ax.bar(0, score)   
-        self.barGraph.ax.set_xlabel('Alpha Power')
-        self.barGraph.ax.set_ylim(ylim)        
+    
+           
 
 
 

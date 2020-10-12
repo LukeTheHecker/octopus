@@ -405,6 +405,7 @@ class DummyGather:
         if not self.connected:
             # If connection to Remote Data Access was not established yet
             print("Gatherer is not connected.")
+            time.sleep(0.25)
             return
         self.fresh_init()
         while self.connected:
@@ -445,7 +446,7 @@ class DummyGather:
         # Define channel names
         self.channelNames = ['Cz', 'leftBrain', 'rightBrain', 'centerOfConsciousness', 'TP9', 'TP10', 'VEOG']
         # Define numerical data
-        (self.channelCount, self.samplingInterval) = [len(self.channelNames), 4000]
+        (self.channelCount, self.samplingInterval) = [len(self.channelNames), 1000]
 
         # Extract resolutions
         self.resolutions = [0.01] * self.channelCount
@@ -467,10 +468,10 @@ class DummyGather:
         # Preprocessing (rereferencing, ...)
         self.preprocess_data()
 
-        # Some eye artifacts
+        # Some stochastically ocurring eye artifacts
         if np.random.rand(1) < 0.05:
             eog_idx = self.channelNames.index('VEOG')
-            self.data[eog_idx, :] = pulse(self.blockSize) * 30
+            self.data[eog_idx, :] = pulse(self.blockSize) * 50
             for i in range(self.channelCount):
                 if i != eog_idx:
                     self.data[i, :] += self.data[eog_idx, :] * self.d

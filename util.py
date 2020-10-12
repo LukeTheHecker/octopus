@@ -20,16 +20,16 @@ def insert(arr, piece):
     piece : int/float/list/numpy.ndarray, a single value or array of values to insert at the end.
     '''
     assert type(arr) == list or type(arr) == np.ndarray, "arr must be of type list or numpy.ndarray but is of type {}".format(type(arr))
-    # in case of piece being a single value: put in list
-    if type(piece) == int or type(piece) == float:
-        piece = [piece]
-        
-    if type(arr) == list:
-        arr = np.array(arr)
-        
+    
+    if type(piece) == float or type(piece) == int:
+        piece = np.array([piece])
+    
     if type(piece) == list:
         piece = np.array(piece)
-
+    
+    if type(arr) == list:
+        arr = np.array(arr)
+    
     if len(arr.shape) == 1:
         arr = np.expand_dims(arr, axis=0)
     
@@ -41,7 +41,7 @@ def insert(arr, piece):
     new_arr[:, 0:-piecelen] = arr[:, piecelen:]
     new_arr[:, -piecelen:] = piece
 
-    return new_arr
+    return np.squeeze(new_arr)
 
 def gui_retry_cancel(fun, text=('Connection could not be established.', 'Try again?')):
     MB_OK = 0x00000000
@@ -96,11 +96,14 @@ def gradient_descent(fun, EOG, Cz, stepsize=0.1, max_iter=10000, maxStepDec=100)
     return d
 
 def bandpower(x, fs, fmin, fmax):
-
     if any(np.isnan(x)):
-        x = interp_nans(x)
+        try:
+            x = interp_nans(x)
+        except:
+            print("except!")
+            return 0
 
-    f, Pxx = periodogram(x, fs=fs)
+    f, Pxx = periodogram(x, fs=fs, nfft=len(x)*10)
     ind_min = argmax(f > fmin) - 1
     ind_max = argmax(f > fmax) - 1
     return trapz(Pxx[ind_min: ind_max], f[ind_min: ind_max])
@@ -124,6 +127,7 @@ def freq_band_power(data, freqs, sr):
         data = np.array(data)
     if len(data.shape) == 1:
         data = np.expand_dims(data, axis=0)
+
     scoreList = []
     # loop through all electrodes
     for elec in range(data.shape[0]):
@@ -132,7 +136,7 @@ def freq_band_power(data, freqs, sr):
     meanScoreList = np.mean(scoreList)
     
     return meanScoreList
-         
+        
 def nan_helper(y):
     """Helper to handle indices and logical indices of NaNs.
 

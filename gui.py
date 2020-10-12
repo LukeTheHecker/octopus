@@ -85,8 +85,8 @@ class MainWindow(QMainWindow):
 
         # Neurofeedback Tab
         self.layoutNF = QGridLayout()
-        self.barGraph = MplCanvas(self, width=5, height=4, dpi=100)
-        self.layoutNF.addWidget(self.barGraph, 0, 0)
+        self.NFCanvas = MplCanvas(self, width=5, height=4, dpi=100)
+        self.layoutNF.addWidget(self.NFCanvas, 0, 0)
         self.tabNeuroFeedback.setLayout(self.layoutNF)
 
 
