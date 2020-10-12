@@ -29,7 +29,7 @@ class MainWindow(QMainWindow):
         # Data monitor Graph
         self.graphWidget1 = pg.PlotWidget()
         self.graphWidget1.enableAutoRange('y', False)
-        pen = pg.mkPen(color='r', width=2)
+        pen = pg.mkPen(color='r', width=1)
         self.curve1 = self.graphWidget1.plot(pen=pen)
         # Title
         self.title = QLabel()
@@ -114,7 +114,7 @@ class InputDialog(QMainWindow):
         self.EOGChannelName = QLineEdit("VEOG", self)
         self.SCPTrialDuration = QLineEdit("2.5", self)
         self.SCPBaselineDuration = QLineEdit("0.20", self)
-        self.histCrit = QLineEdit("5", self)
+        self.samplingCrit = QLineEdit("5", self)
         self.secondInterviewDelay = QLineEdit("5", self)
         self.blindedAxis = QCheckBox(self)
         self.blindedAxis.setChecked(True)
@@ -128,7 +128,7 @@ class InputDialog(QMainWindow):
         self.layout.addItem(verticalSpacer)
         self.layout.addRow("SCP dur in seconds", self.SCPTrialDuration)
         self.layout.addRow("SCP baseline dur in seconds", self.SCPBaselineDuration)
-        self.layout.addRow("Histogram Criterion", self.histCrit)
+        self.layout.addRow("SCP sampling criterion", self.samplingCrit)
         self.layout.addRow("Delay to 2nd Interview", self.secondInterviewDelay)
         self.layout.addRow("Blinding", self.blindedAxis)
         
@@ -154,7 +154,7 @@ class InputDialog(QMainWindow):
                     'EOGChannelName': self.EOGChannelName.text(),
                     'SCPTrialDuration': self.SCPTrialDuration.text(),
                     'SCPBaselineDuration': self.SCPBaselineDuration.text(),
-                    'histCrit': self.histCrit.text(),
+                    'samplingCrit': self.samplingCrit.text(),
                     'secondInterviewDelay': self.secondInterviewDelay.text(),
                     'blindedAxis': self.blindedAxis.isChecked()}
         return settings

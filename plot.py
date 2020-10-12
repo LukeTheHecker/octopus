@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 matplotlib.use('Qt5Agg')
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from mne.filter import filter_data
+from scipy.signal import detrend
 # from callbacks import Callbacks
 
 class DataMonitor:
@@ -70,6 +71,8 @@ class DataMonitor:
         self.viewChannelIndex = gatherer.channelNames.index(self.viewChannel)
         dataMemory = gatherer.dataMemory[self.viewChannelIndex, :]
         eogMemory = gatherer.dataMemory[self.EOGChannelIndex, :]
+        # Prepare EOG
+        # eogMemory = detrend(eogMemory)  # takes very long (~0.33 seconds on busy laptop)
         # Correct EOG
         dataMemory = dataMemory - (eogMemory * d_est[self.viewChannelIndex])
         IncomingBlockMemory = gatherer.blockMemory
@@ -162,12 +165,12 @@ class DataMonitor:
 
 class HistMonitor:
     def __init__(self, sr, canvas, SCPTrialDuration=2.5, scpBaselineDuration=0.25, 
-            histCrit=5, channelOfInterestIdx=None, EOGChannelIndex = None, blinder=1):
+            channelOfInterestIdx=None, EOGChannelIndex = None, blinder=1):
         self.canvas = canvas
         self.sr = sr
         self.SCPTrialDuration = SCPTrialDuration
         self.scpBaselineDuration = scpBaselineDuration
-        self.histCrit = histCrit
+        self.kdeCrit = 5
         self.package_size = None
         # Data processing
         self.filtfreq = (None, 0.5)
@@ -228,11 +231,11 @@ class HistMonitor:
         
         # Clear axis
         self.canvas.ax.clear()
-        if len(self.scpAveragesList) < self.histCrit and len(self.scpAveragesList) > 1:
+        if len(self.scpAveragesList) < self.kdeCrit and len(self.scpAveragesList) > 1:
             sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=False,
                 hist=True)
             
-        elif len(self.scpAveragesList) >= self.histCrit:
+        elif len(self.scpAveragesList) >= self.kdeCrit:
             sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=True,
                 hist=True)
             # Get the maximum value of the kde distribution
@@ -327,8 +330,8 @@ class BaseNeuroFeedback:
 
     def extract_current_data(self, dataMemory, blockMemory):
         blockMemory = list(blockMemory)
-        newBlocks = (self.BlocksProcessed, int(blockMemory[-1]))
-        print(f"new blocks={newBlocks}")
+        newBlocks = (int(self.BlocksProcessed), int(blockMemory[-1]))
+        # print(f"new blocks={newBlocks}")
         newBlocksIndices = (blockMemory.index(newBlocks[0]), blockMemory.index(newBlocks[1]))
 
         currentData = dataMemory[self.indicesOfInterest, newBlocksIndices[0]:newBlocksIndices[1]]

@@ -70,7 +70,7 @@ class Callbacks:
             self.octopus.handleChannelIndex() 
             self.octopus.fillChannelDropdown()
             self.octopus.init_plots()
-            # self.octopus.startNeurofeedbacks()
+            
             
         return result
     

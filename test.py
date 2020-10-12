@@ -1,8 +1,6 @@
-class mcl:
-    def __init__(self):
-        self.a = 5
-
-
-inst = mcl()
-inst.b = 6
-print(f'a={inst.a}\nb={inst.b}')
+from util import pulse
+import matplotlib.pyplot as plt
+import numpy as np
+plt.figure()
+plt.plot(np.arange(100), pulse(100))
+plt.show()

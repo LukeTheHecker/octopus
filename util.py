@@ -57,7 +57,13 @@ def calc_error(EOG, Cz, d):
     error = abs(pearsonr(EOG, Cz - (EOG*d))[0])
     return error
 
-def gradient_descent(fun, EOG, Cz, stepsize=0.05, max_iter=10000, maxStepDec=3):
+def rms(x):
+    return np.sqrt(np.mean(np.square(x)))
+
+def demean(x):
+    return x - np.mean(x)
+
+def gradient_descent(fun, EOG, Cz, stepsize=0.1, max_iter=10000, maxStepDec=100):
 
     d = random.uniform(-0.5, 0.5)
     d_mem = [d]
@@ -75,15 +81,16 @@ def gradient_descent(fun, EOG, Cz, stepsize=0.05, max_iter=10000, maxStepDec=3):
             d = d - stepsize     
         d_mem.append(d)
 
+
         if cnt > 3:
             if cnt >= max_iter: # or d_mem[-3] == d_mem [-1] or:
                 numberOfDecreasedStepsizes += 1
                 stepsize /= 2
-                max_iter += 100
-                print(f'decreased stepsize to {stepsize}')
+                max_iter += 2
+                # print(f'decreased stepsize to {stepsize}')
                 if numberOfDecreasedStepsizes >= maxStepDec:
                     cont = False
-        cnt += 1  
+        cnt += 1
         # print(f"cnt {cnt}: d changed to {d}") 
     print(f"Required {cnt} iterations.")
     return d
@@ -175,3 +182,13 @@ class Scheduler:
             self.run_hist_intervals.append(current_time)
             self.cnt += 1
             [fun() for fun in self.list_of_functions]
+            
+
+def pulse(x):
+    ''' Returns a pulse of length x'''
+    sr = 1
+    freq = (1/x) / 2
+    time = np.arange(x)
+
+    signal = np.sin(2*np.pi*freq*time)
+    return signal

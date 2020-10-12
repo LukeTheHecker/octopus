@@ -5,7 +5,7 @@ import pyqtgraph as pg
 
 import matplotlib.pyplot as plt
 from callbacks import Callbacks
-from gather import Gather
+from gather import Gather, DummyGather
 from plot import DataMonitor, HistMonitor, BaseNeuroFeedback
 from gui import *
 from util import calc_error, gradient_descent, freq_band_power
@@ -17,6 +17,7 @@ import json
 import random
 from workers import *
 from copy import deepcopy
+from scipy.signal import detrend
 
 class Octopus(MainWindow):
     def __init__(self):
@@ -54,7 +55,7 @@ class Octopus(MainWindow):
         self.EOGChannelName = settings['EOGChannelName']
         self.SCPTrialDuration = float(settings['SCPTrialDuration'])
         self.SCPBaselineDuration = float(settings['SCPBaselineDuration'])
-        self.histCrit = int(settings['histCrit'])
+        self.samplingCrit = int(settings['samplingCrit'])
         self.secondInterviewDelay = int(settings['secondInterviewDelay'])
         self.blindedAxis = bool(settings['blindedAxis'])
         
@@ -84,7 +85,7 @@ class Octopus(MainWindow):
         self.read_blinded_conditions()
 
         # Objects 
-        self.gatherer = Gather()
+        self.gatherer = DummyGather() # Gather()
         self.callbacks.connectRDA()
         self.internal_tcp = StimulusCommunication(self)
         
@@ -113,21 +114,26 @@ class Octopus(MainWindow):
         self.threadpool.start(self.worker_communication)
         
     def init_plots(self):
+        ''' Start Data and Histogram Monitor: '''
         if not hasattr(self, 'gatherer'):
+            self.plotsReady = False
             return
         if not hasattr(self, 'internal_tcp'):
+            self.plotsReady = False
             return
 
-        if self.gatherer.connected and self.internal_tcp.connected:
+        if self.gatherer.connected:
             self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
                 curve=self.curve1, widget=self.graphWidget1, title=self.title, 
                 viewChannel=self.viewChannel, EOGChannelIndex=self.EOGChannelIndex,
                 blinder=self.blinder)
             
             self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
-                SCPTrialDuration=self.SCPTrialDuration, histCrit=self.histCrit,
-                channelOfInterestIdx=self.channelOfInterestIdx, EOGChannelIndex=self.EOGChannelIndex,
-                blinder=self.blinder)
+                SCPTrialDuration=self.SCPTrialDuration, 
+                channelOfInterestIdx=self.channelOfInterestIdx,
+                EOGChannelIndex=self.EOGChannelIndex, blinder=self.blinder)
+
+            # self.startNeurofeedbacks()
             self.plotsReady = True
         else:
             self.plotsReady = False
@@ -166,7 +172,7 @@ class Octopus(MainWindow):
                 self.current_state += 1
                 self.callbacks.presentToggle()
                 
-        if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.hist_monitor.histCrit:
+        if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.samplingCrit:
             self.current_state = 1
             self.hist_monitor.current_state = self.current_state
             # self.textbox.statusBox.set_text(f"State={self.current_state}")
@@ -185,7 +191,7 @@ class Octopus(MainWindow):
         
         n_scps = len(self.hist_monitor.scpAveragesList)
 
-        if n_scps < self.hist_monitor.histCrit:
+        if n_scps < self.samplingCrit:
             print("Too few SCPs in list.")
             self.go_interview = False
             return
@@ -224,9 +230,9 @@ class Octopus(MainWindow):
                 elif condition == 'Negative':
                     self.go_interview = (last_scp < avg_scp - sd_scp) and (last_scp < 0)
 
-        if not self.go_interview and n_scps < self.histCrit:
+        if not self.go_interview and n_scps < self.samplingCrit:
             print("Too few trials to start interview.")
-        if not self.go_interview and n_scps >= self.histCrit:
+        if not self.go_interview and n_scps >= self.samplingCrit:
             print("SCP not large enough to start interview.")
         
     def get_statelist(self):
@@ -263,8 +269,7 @@ class Octopus(MainWindow):
         # spelling or workspace
         try:
             self.channelOfInterestIdx = self.gatherer.channelNames.index(self.channelOfInterestName)
-            print(f"Selected Channel {self.channelOfInterestName} is in index {self.channelOfInterestIdx}")
-            # self.channelOfInterestIdx = 1
+            self.EOGChannelIndex = self.gatherer.channelNames.index(self.EOGChannelName)
         except ValueError:
             print(f"Channel name {self.channelOfInterestName} is not in the list of channels ({self.gatherer.channelNames})")
             print('Opening Gui again')
@@ -337,16 +342,27 @@ class Octopus(MainWindow):
         idx_eog = self.gatherer.channelNames.index(name_eog)
         print(f"name of selected EOG channel: {name_eog}, idx={idx_eog}")
         EOG = data[idx_eog, :]
-        # 2.1) Scale EOG to be roughly equal to the other signal
-        rms_coi = np.sqrt(np.mean(np.square(data[self.channelOfInterestIdx, :]))) 
-        rms_eog = np.sqrt(np.mean(np.square(data[idx_eog, :]))) 
-        scaler = rms_coi / rms_eog
 
-        # 3) Estimate 'd'
+        # 3) Detrend signals
+        EOG = detrend(EOG)  # try to eliminate drifts etc
+
+        # 4) Calculate ratio of rms between EOG and other channels
+        from util import rms
+        rms_eog = rms(EOG)
+        rms_chans = [rms(dat) for i, dat in enumerate(data)]
+        
+        amplitudeRatios = [rms_chan / rms_eog for rms_chan in rms_chans]
+
+        # 5) Estimate 'd' for each channel separately using individual scalings
         print('\tCalc d...')
-        self.d_est = [gradient_descent(calc_error, EOG*scaler, data[idx, :]) for idx in range(len(self.gatherer.channelNames))]
-        self.d_est = [i*scaler for i in self.d_est]
-
+        d_est = []
+        for idx in range(data.shape[0]):
+            scaler = amplitudeRatios[idx]
+            tmp_d_est = gradient_descent(calc_error, EOG*scaler, data[idx, :])
+            tmp_d_est *= scaler
+            d_est.append(tmp_d_est)
+        
+        self.d_est = d_est
         print('\t\t...done.')
         return (data, idx_eog)
 
