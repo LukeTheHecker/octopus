@@ -1,18 +1,33 @@
+astroid==2.4.1
 certifi==2020.6.20
+colorama==0.4.3
 cycler==0.10.0
+future==0.18.2
+graphviz==0.14.1
+isort==4.3.21
 kiwisolver==1.2.0
-matplotlib==3.3.1
+lazy-object-proxy==1.4.3
+matplotlib @ file:///C:/ci/matplotlib-base_1597858295275/work
+mccabe==0.6.1
+mkl-fft==1.2.0
+mkl-random==1.1.1
+mkl-service==2.3.0
 mne==0.21.0
-numpy==1.19.1
-pandas==1.1.1
-Pillow==7.2.0
+nolds==0.5.2
+numpy @ file:///C:/ci/numpy_and_numpy_base_1596233948451/work
+olefile==0.46
+pandas @ file:///C:/ci/pandas_1598353517372/work
+Pillow @ file:///C:/ci/pillow_1594299032796/work
+pylint==2.5.2
 pyparsing==2.4.7
-PyQt5==5.15.1
-PyQt5-sip==12.8.1
 pyqtgraph==0.11.0
 python-dateutil==2.8.1
 pytz==2020.1
-scipy==1.5.2
+scipy @ file:///C:/ci/scipy_1597675683670/work
 seaborn==0.10.1
 six==1.15.0
+toml==0.10.1
+tornado==6.0.4
+typed-ast==1.4.1
 wincertstore==0.2
+wrapt==1.12.1

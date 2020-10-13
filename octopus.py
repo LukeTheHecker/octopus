@@ -7,7 +7,8 @@ import pyqtgraph as pg
 import matplotlib.pyplot as plt
 from callbacks import Callbacks
 from gather import Gather, DummyGather
-from plot import DataMonitor, HistMonitor, BaseNeuroFeedback
+from plot import DataMonitor, HistMonitor
+from neurofeedback import BaseNeuroFeedback
 from gui import *
 from neuroFeedbackViz import BarPlotAnimation, circleAnimation
 from util import calc_error, gradient_descent, freq_band_power
@@ -47,8 +48,8 @@ class Octopus(MainWindow):
         print('Initialized Octopus')
     
     def open_settings_gui(self):
-        self.mydialog = InputDialog(self)
-        self.mydialog.show()
+        mydialog = InputDialog(self)
+        mydialog.show()
     
     def saveSettings(self, settings):
         ''' Save the settings entered by the User on startup of the program.'''
@@ -85,7 +86,7 @@ class Octopus(MainWindow):
         
         # Load subject data in case of a crash
         self.load()
-        
+        # Read the blinding assignment
         self.read_blinded_conditions()
 
         # Objects 
@@ -160,6 +161,7 @@ class Octopus(MainWindow):
             self.save()
             self.checkState()
         else:
+            # Don't rush if plots aren't ready yet
             time.sleep(0.25)
             self.init_plots()
 
@@ -172,6 +174,8 @@ class Octopus(MainWindow):
     def checkState(self, recent_response=False):
         ''' This method specifies the logic of the experiment.
             States are listed in get_statelist().
+            ##TODO: this method should be decomposed ##
+            
         '''
         # print('Checking state')
         if recent_response and (self.current_state == 1 or self.current_state == 3):
@@ -287,7 +291,6 @@ class Octopus(MainWindow):
         ''' Save the current state of the experiment. 
         (not finished)
         '''
-        # print('saving')
         if not os.path.isdir('states/'):
             # If there is no folder to store states in -> create it
             os.mkdir('states/')
@@ -306,27 +309,13 @@ class Octopus(MainWindow):
             
     def load(self):
         ''' Check if subject is already in folder and ask whether the data should be loaded.'''
-            
         filename = "states/" + self.SubjectID + '.json'
         if not os.path.isfile(filename):
             print("This is a new participant.")
+            self.save()
         else:
-            answer = input(f"ID {self.SubjectID} already exists. Load data? [Y/N] ")
-            if answer == "Y":
-                with open(filename, 'r') as f:
-                    json_file_read = json.load(f)
-                
-                State = json.loads(json_file_read)
-
-                self.hist_monitor.scpAveragesList = State['scpAveragesList']
-                self.current_state = State['current_state']
-                self.SubjectID = State['SubjectID']
-                self.cond_order = State['cond_order']
-                self.d_est = State['d_est']
-            elif answer == "N":
-                self.save()
-            else:
-                self.load()
+            self.loadDialog = LoadDialog(self)
+            self.loadDialog.show()
 
     def closeAll(self):
         # Save experiment

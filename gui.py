@@ -5,6 +5,7 @@ from PyQt5.QtCore import *
 import pyqtgraph as pg
 from plot import MplCanvas
 from workers import *
+import json
 
 class MainWindow(QMainWindow):
     ''' Main Window of the Octopus Neurofeedback App. '''
@@ -214,5 +215,72 @@ class SelectChannels(QWidget):
         self.octopus.threadpool.start(worker)
         self.close()
 
+
+class LoadDialog(QMainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent)
         
+        self.parent = parent
+        self.filename = "states/" + parent.SubjectID + '.json'
+
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
+        title = f'Alert!'
+        self.setWindowTitle(title)
+        
+        self.buttonBox  = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.No)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        label = QLabel()
+        text = f"ID >>>{self.parent.SubjectID}<<< already exists. Load data?"
+        label.setText(text)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(label)
+        self.layout.addWidget(self.buttonBox)
+
+
+        self.mainWidget.setLayout(self.layout)
+        
+        # Dont allow to close window
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+   
+    def getInputs(self):
+        settings = {'SubjectID': self.SubjectID.text(),
+                    'channelOfInterestName': self.channelOfInterestName.text(),
+                    'refChannels': self.refChannels.text(),
+                    'EOGChannelName': self.EOGChannelName.text(),
+                    'SCPTrialDuration': self.SCPTrialDuration.text(),
+                    'SCPBaselineDuration': self.SCPBaselineDuration.text(),
+                    'samplingCrit': self.samplingCrit.text(),
+                    'secondInterviewDelay': self.secondInterviewDelay.text(),
+                    'blindedAxis': self.blindedAxis.isChecked()}
+        return settings
+
+    def accept(self):
+        with open(self.filename, 'r') as f:
+            json_file_read = json.load(f)
+        
+        State = json.loads(json_file_read)
+
+        self.parent.hist_monitor.scpAveragesList = State['scpAveragesList']
+        self.parent.current_state = State['current_state']
+        self.parent.SubjectID = State['SubjectID']
+        self.parent.cond_order = State['cond_order']
+        self.parent.d_est = State['d_est']
+        self.close()
+
+    def reject(self):
+        self.parent.save()
+        self.close()
+
+    def checkEntries(self):
+        settings = self.getInputs()
+        for key, item in settings.items():
+            if item == '':
+                self.parent.open_settings_gui()
+                return
+        # All entries are there!
+        self.parent.run(settings)       
   

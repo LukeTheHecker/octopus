@@ -85,8 +85,8 @@ class Callbacks:
     def EOGcorrection(self):
         if self.octopus.gatherer.connected:
             print('Starting EOG Correction')
-            self.mydialog = SelectChannels(self.octopus)
-            self.mydialog.show()
+            mydialog = SelectChannels(self.octopus)
+            mydialog.show()
         else:
             print('EOG correction is not possible until gatherer is connected to RDA.')
 
