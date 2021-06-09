@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from gui import SelectChannels
+from gui import SelectChannels, InputDialog
 
 
 class Callbacks:

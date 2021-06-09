@@ -176,8 +176,8 @@ class InputDialog(QMainWindow):
         # All entries are there!
         self.parent.run(settings)
 
-class SelectChannels(QWidget):
-    def __init__(self, octopus, parent=None):
+class SelectChannels(QMainWindow):
+    def __init__(self, octopus):
         
         # Check if gatherer is connected at all:
         self.octopus = octopus
@@ -185,15 +185,15 @@ class SelectChannels(QWidget):
             print(f'Cannot call EOG Correction since Gather class is not connected.')
             return
 
-        super().__init__(parent)
-
+        super().__init__(octopus)
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
         channelnames = self.octopus.gatherer.channelNames
         
-        self.layout = QVBoxLayout()
+        self.layout = QFormLayout()
         self.text = QLabel()
         self.text.setText('Choose the VEOG channel')
         self.cb1 = QComboBox()
-        # self.cb2 = QComboBox()
         self.buttonGO = QPushButton("GO")
 
         for channelname in channelnames:
@@ -204,8 +204,9 @@ class SelectChannels(QWidget):
         self.layout.addWidget(self.buttonGO)
 
         self.buttonGO.pressed.connect(self.startThread)
+        self.mainWidget.setLayout(self.layout)
 
-        self.setLayout(self.layout)
+        # self.setLayout(self.layout)
         self.setWindowTitle("Select channels for EOG correction")
 
     def startThread(self):
@@ -215,6 +216,11 @@ class SelectChannels(QWidget):
         self.octopus.threadpool.start(worker)
         self.close()
 
+    def accept(self):
+        self.close()
+
+    def reject(self):
+        self.close()
 
 class LoadDialog(QMainWindow):
     def __init__(self, parent=None):
@@ -283,4 +289,4 @@ class LoadDialog(QMainWindow):
                 return
         # All entries are there!
         self.parent.run(settings)       
-  
+

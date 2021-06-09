@@ -2,6 +2,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from matplotlib.pyplot import axes
+from numpy.lib.format import _has_metadata
 import pyqtgraph as pg
 
 import matplotlib.pyplot as plt
@@ -90,7 +91,7 @@ class Octopus(MainWindow):
         self.read_blinded_conditions()
 
         # Objects 
-        self.gatherer = DummyGather() # Gather()
+        self.gatherer = Gather()  # DummyGather() 
         self.callbacks.connectRDA()
         self.internal_tcp = StimulusCommunication(self)
         
@@ -294,6 +295,8 @@ class Octopus(MainWindow):
         if not os.path.isdir('states/'):
             # If there is no folder to store states in -> create it
             os.mkdir('states/')
+        if not hasattr(self, 'hist_monitor'):
+            return
 
         State = {'scpAveragesList': list(self.hist_monitor.scpAveragesList), 
                 'current_state':int(self.current_state), 
@@ -355,7 +358,7 @@ class Octopus(MainWindow):
         d_est = []
         for idx in range(data.shape[0]):
             scaler = amplitudeRatios[idx]
-            tmp_d_est = gradient_descent(calc_error, EOG*scaler, data[idx, :])
+            tmp_d_est = gradient_descent(calc_error, EOG*scaler, data[idx, :], max_iter=100000)
             tmp_d_est *= scaler
             d_est.append(tmp_d_est)
         
@@ -388,15 +391,15 @@ class Octopus(MainWindow):
         plt.figure(num=42)
         plt.subplot(311)
         plt.plot(EOG)
-        plt.ylim(ylim)
+        # plt.ylim(ylim)
         plt.title("EOG")
         plt.subplot(312)
         plt.plot(COI)
-        plt.ylim(ylim)
+        # plt.ylim(ylim)
         plt.title(f"Channel of interest ({self.channelOfInterestName})")
         plt.subplot(313)
         plt.plot(COI - (EOG * d))
-        plt.ylim(ylim)
+        # plt.ylim(ylim)
         title = f"Cleaned COI with d={d:.2f}. Reduced corr from {error_uncleaned:.2f} to {error_cleaned:.2f}"
         plt.title(title)
         plt.tight_layout(pad=2)
@@ -404,14 +407,14 @@ class Octopus(MainWindow):
 
     def startNeurofeedbacks(self):
         # Frequency Band Power Neurofeedback:
-        channelsOfInterest = ['Cz', 'TP9']
-        freqs = (8, 13)  # low and high frequency for the bandpass filter
+        channelsOfInterest = ['Cz']
+        freqs = (15, 30)  # low and high frequency for the bandpass filter
         sr = self.gatherer.sr
         fun = freq_band_power
         self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, freqs, sr, timeRangeProcessed=0.25, 
             channelsOfInterest=channelsOfInterest)
 
-        # Detrended Fluctuation Analysis Exponent
+        # # Detrended Fluctuation Analysis Exponent
         # channelsOfInterest = ['Cz']
         # fun = dfa
         # self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, timeRangeProcessed=0.25, 
