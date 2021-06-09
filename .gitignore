@@ -3,3 +3,4 @@
 *.ipynb
 states/*
 _*_.py
+data

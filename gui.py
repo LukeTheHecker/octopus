@@ -45,7 +45,7 @@ class MainWindow(QMainWindow):
         # Add channel dropdown
         self.channel_dropdown = QComboBox()
         # Add buttons
-        self.buttonPresentationcontrol = QPushButton("Allow")
+        self.buttonPresentationcontrol = QPushButton("Disabled")
         self.buttonPresentationcontrol.setStyleSheet("background-color: red")
         self.buttonQuit = QPushButton("Quit")
         self.buttonforward = QPushButton("->")
@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
         self.buttonEOGcorrection = QPushButton("EOG Correction")
         self.buttonConnectRDA = QPushButton("Connect RDA")
         self.buttonConnectLibet = QPushButton("Connect Libet")
+        self.buttonToggleEOGcorrection = QPushButton("EOG On/Off")
         
         # Button Group
         button_layout = QGridLayout()
@@ -63,6 +64,8 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.buttonConnectRDA, 2, 1)
         button_layout.addWidget(self.buttonConnectLibet, 2, 2)
         button_layout.addWidget(self.buttonEOGcorrection, 2, 0)
+        button_layout.addWidget(self.buttonToggleEOGcorrection, 3, 0)
+        
         # Lag and channel dropdown thing
         second_head_layout = QGridLayout()
         second_head_layout.addWidget(self.title, 0, 0)

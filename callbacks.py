@@ -6,7 +6,7 @@ from gui import SelectChannels, InputDialog
 class Callbacks:
     def __init__(self, octopus):
         self.allow_presentation = False
-        self.permission_statement = ['Allow', 'Forbid']
+        self.permission_statement = ['Disabled', 'Enabled']
         self.buttonColor = ["background-color: red", "background-color: green"]
         self.quit = False
         self.stateChange = 0
@@ -21,12 +21,14 @@ class Callbacks:
         self.octopus.buttonEOGcorrection.pressed.connect(self.EOGcorrection)
         self.octopus.channel_dropdown.currentIndexChanged.connect(self.change_view_channel)
 
+        self.octopus.buttonToggleEOGcorrection.pressed.connect(self.toggleEOGcorrection)
+        self.toggle_EOG_correction_text = ['Off', 'On']
+
     def presentToggle(self):
         self.allow_presentation = not self.allow_presentation
         self.ChangeAllowButton()
 
     def quitexperiment(self):
-        print("pressed")
         self.quit=True
         self.octopus.closeAll()
 
@@ -89,6 +91,16 @@ class Callbacks:
             mydialog.show()
         else:
             print('EOG correction is not possible until gatherer is connected to RDA.')
+    
+    def toggleEOGcorrection(self):
+        ''' Toggle EOG correction on/off'''
+        # Toggle EOG correction
+        self.octopus.toggle_EOG_correction = not self.octopus.toggle_EOG_correction
+        # Change Button label accordingly
+        self.octopus.buttonToggleEOGcorrection.setText(self.toggle_EOG_correction_text[int(self.octopus.toggle_EOG_correction)])
+        # Change Button color accordingly
+        self.octopus.buttonToggleEOGcorrection.setStyleSheet(self.buttonColor[int(self.octopus.toggle_EOG_correction)])
+
 
     def change_view_channel(self):
         print(f'Changed viewchannel for data monitor from {self.octopus.viewChannel} to {self.octopus.channel_dropdown.currentText()}')

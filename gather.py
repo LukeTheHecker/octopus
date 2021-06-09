@@ -5,8 +5,7 @@ import time
 from util import *
 
 class Gather:
-    def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
-        sockettimeout=0.1):
+    def __init__(self, port=51244, sockettimeout=0.1):
         ''' 
         Parameters:
         -----------
@@ -38,7 +37,7 @@ class Gather:
 
         # Data TCP Connection (with PC that sends RDA)
         self.connected = False
-        self.ip = ip
+        self.ip = gethostbyname(gethostname())
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')

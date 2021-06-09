@@ -1,9 +1,6 @@
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-from matplotlib.pyplot import axes
-from numpy.lib.format import _has_metadata
-import pyqtgraph as pg
 
 import matplotlib.pyplot as plt
 from callbacks import Callbacks
@@ -42,6 +39,7 @@ class Octopus(MainWindow):
         self.communicate_quit_code = 2
         self.EOGCorrectionDuration = 10
         self.d_est = np.zeros(100)
+        self.toggle_EOG_correction = True
         self.responded = False
         self.current_state = 0
         self.get_statelist()
@@ -99,24 +97,28 @@ class Octopus(MainWindow):
         self.plotsReady = False
         self.init_plots()
 
+        # Timer: Like a scheduler that runs functions after a given interval
         # Set timer for GUI-related tasks:
         self.timer = QTimer()
         self.timer.setInterval(100)  # every 100 ms it is called
         self.timer.timeout.connect(self.GUI_routines)
         self.timer.start()
         
+        # Set timer for the Data Monitor plot
         self.plotTimer = QTimer()
         self.plotTimer.setInterval(20)  # every 20 ms it is called
         self.plotTimer.timeout.connect(self.data_monitor_update)
         self.plotTimer.start()
 
-        # Threading:
+        # Threading: Worker call functions  asynchronously
+
+        # Worker: Data Gatherer (which reads data from brain vision RDA via TCP)
         self.worker_gatherer = Worker(self.gatherer.gather_data)
+        self.threadpool.start(self.worker_gatherer)
+        
+        # Worker: Signalling (Sends signals to the stimulus presentation program)
         self.worker_communication = SignallingWorker(self.internal_tcp.communication_routines)
         self.worker_communication.signals.result.connect(self.response_triggered)  
-        
-        
-        self.threadpool.start(self.worker_gatherer)
         self.threadpool.start(self.worker_communication)
         
     def init_plots(self):
@@ -139,14 +141,15 @@ class Octopus(MainWindow):
                 channelOfInterestIdx=self.channelOfInterestIdx,
                 EOGChannelIndex=self.EOGChannelIndex, blinder=self.blinder)
 
-            self.startNeurofeedbacks()
+            # self.startNeurofeedbacks()
             self.plotsReady = True
         else:
             self.plotsReady = False
 
     def data_monitor_update(self):
         if self.plotsReady:
-            self.data_monitor.update(self.gatherer, self.d_est, self.viewChannel)
+            # self.data_monitor.update(self.gatherer, self.d_est, self.viewChannel)
+            self.data_monitor.update(self)
         else:
             # Plots not ready - sleep a bit!
             time.sleep(0.25)
@@ -322,7 +325,7 @@ class Octopus(MainWindow):
 
     def closeAll(self):
         # Save experiment
-        print("stopping")
+        print("Closing Octopus")
         self.save()
         # close routines
         self.plotTimer.stop()
@@ -413,15 +416,4 @@ class Octopus(MainWindow):
         fun = freq_band_power
         self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, freqs, sr, timeRangeProcessed=0.25, 
             channelsOfInterest=channelsOfInterest)
-
-        # # Detrended Fluctuation Analysis Exponent
-        # channelsOfInterest = ['Cz']
-        # fun = dfa
-        # self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, timeRangeProcessed=0.25, 
-        #     channelsOfInterest=channelsOfInterest, fit_exp='poly')
-
-    
-           
-
-
-
+     
