@@ -1,7 +1,7 @@
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-
+from callbacks import Callbacks
 import pyqtgraph as pg
 from plot import MplCanvas
 from workers import *
@@ -12,8 +12,43 @@ class MainWindow(QMainWindow):
     def __init__(self):
 
         super(MainWindow, self).__init__()
-        self.setFixedSize(1000, 600)
+        self.setFixedSize(1200, 720)
+
+        # Callbacks
+        self.callbacks = Callbacks()
         # Create App Window
+        # Menu
+        menubar = self.menuBar()
+        # File - Dropdown
+        file_menu = menubar.addMenu('File')
+
+        load_state_button = QAction('Load state', self)
+        file_menu.addAction(load_state_button)
+        # load_state_button.connect(self.callbacks.load_state)
+
+        save_state_button = QAction('Save state', self)
+        file_menu.addAction(save_state_button)
+        # save_state_button.connect(self.callbacks.save_state)
+
+        quit_button = QAction('Quit', self)
+        file_menu.addAction(quit_button)
+        quit_button.connect(self.callbacks.quit)
+
+        # Edit - Dropdown
+        edit_menu = menubar.addMenu('Edit')
+
+        settingsButton = QAction('Settings', self)
+        edit_menu.addAction(self.settingsButton)
+        settingsButton.connect(self.callbacks.open_settings)
+
+        # Connections - Dropdown
+        connections_menu = menubar.addMenu('Connections')
+        connect_rda_button = QAction('Connect RDA', self)
+        connections_menu.addAction(self.connect_rda_button)
+        connect_libet_button = QAction('Connect Libet', self)
+        connections_menu.addAction(self.connect_libet_button)
+
+        
         # Tabs
         # Initialize tab screen
         self.tabs = QTabWidget()
@@ -93,11 +128,6 @@ class MainWindow(QMainWindow):
         self.layoutNF.addWidget(self.NFCanvas, 0, 0)
         self.tabNeuroFeedback.setLayout(self.layoutNF)
 
-
-        
-        
-
-        
         self.setCentralWidget(self.tabs)
         # self.mainWidget.setLayout(self.layout)
     

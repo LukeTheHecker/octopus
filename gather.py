@@ -1,4 +1,4 @@
-from socket import *
+import socket
 from struct import *
 import numpy as np
 import time
@@ -37,7 +37,7 @@ class Gather:
 
         # Data TCP Connection (with PC that sends RDA)
         self.connected = False
-        self.ip = gethostbyname(gethostname())
+        self.ip = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
@@ -54,7 +54,7 @@ class Gather:
         #             return
 
         print(f'Attempting connection to RDA {self.ip} {self.port}...')
-        self.con = socket(AF_INET, SOCK_STREAM)
+        self.con = socket.socket(AF_INET, SOCK_STREAM)
         self.con.settimeout(self.sockettimeout)
 
         try:
@@ -308,7 +308,7 @@ class Gather:
 
 
 class DummyGather:
-    def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
+    def __init__(self, port=51244, targetMarker='response',
         sockettimeout=0.1):
         ''' 
         Parameters:
@@ -340,7 +340,7 @@ class DummyGather:
 
         # Data TCP Connection (with PC that sends RDA)
         self.connected = False
-        self.ip = ip
+        self.ip = gethostbyname(gethostname())
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
@@ -461,7 +461,7 @@ class DummyGather:
             self.startTime = time.time()
 
         # Extract eeg data as array of floats
-        self.data = np.random.randn(self.channelCount, self.blockSize)
+        self.data = np.cumsum(np.random.randn(self.channelCount, self.blockSize), axis=1)
         for i in range(self.channelCount):
             self.data[i, :] = np.cumsum(self.data[i, :])
         # Preprocessing (rereferencing, ...)
@@ -523,6 +523,3 @@ class DummyCon:
         self.connected = False
 
 
-# gatherer = Gather()
-# gatherer.connect()
-# gatherer.gather_data()

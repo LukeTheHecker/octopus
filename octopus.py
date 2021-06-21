@@ -3,11 +3,11 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 
 import matplotlib.pyplot as plt
-from callbacks import Callbacks
+# from callbacks import Callbacks
 from gather import Gather, DummyGather
 from plot import DataMonitor, HistMonitor
 from neurofeedback import BaseNeuroFeedback
-from gui import *
+import gui
 from neuroFeedbackViz import BarPlotAnimation, circleAnimation
 from util import calc_error, gradient_descent, freq_band_power
 from communication import StimulusCommunication
@@ -16,13 +16,13 @@ import numpy as np
 import os
 import json
 import random
-from workers import *
+import workers
 from copy import deepcopy
 from scipy.signal import detrend
 
 from nolds import dfa
 
-class Octopus(MainWindow):
+class Octopus(gui.MainWindow):
     def __init__(self):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
@@ -47,7 +47,7 @@ class Octopus(MainWindow):
         print('Initialized Octopus')
     
     def open_settings_gui(self):
-        mydialog = InputDialog(self)
+        mydialog = gui.InputDialog(self)
         mydialog.show()
     
     def saveSettings(self, settings):
@@ -89,7 +89,8 @@ class Octopus(MainWindow):
         self.read_blinded_conditions()
 
         # Objects 
-        self.gatherer = Gather()  # DummyGather() 
+        self.gatherer = DummyGather() 
+        # self.gatherer = Gather()
         self.callbacks.connectRDA()
         self.internal_tcp = StimulusCommunication(self)
         
@@ -113,11 +114,11 @@ class Octopus(MainWindow):
         # Threading: Worker call functions  asynchronously
 
         # Worker: Data Gatherer (which reads data from brain vision RDA via TCP)
-        self.worker_gatherer = Worker(self.gatherer.gather_data)
+        self.worker_gatherer = workers.Worker(self.gatherer.gather_data)
         self.threadpool.start(self.worker_gatherer)
         
         # Worker: Signalling (Sends signals to the stimulus presentation program)
-        self.worker_communication = SignallingWorker(self.internal_tcp.communication_routines)
+        self.worker_communication = workers.SignallingWorker(self.internal_tcp.communication_routines)
         self.worker_communication.signals.result.connect(self.response_triggered)  
         self.threadpool.start(self.worker_communication)
         
@@ -320,7 +321,7 @@ class Octopus(MainWindow):
             print("This is a new participant.")
             self.save()
         else:
-            self.loadDialog = LoadDialog(self)
+            self.loadDialog = gui.LoadDialog(self)
             self.loadDialog.show()
 
     def closeAll(self):

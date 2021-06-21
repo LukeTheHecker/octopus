@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from gui import SelectChannels, InputDialog
+from gui import SelectChannels
 
 
 class Callbacks:
@@ -13,22 +13,30 @@ class Callbacks:
         self.octopus = octopus
 
         self.octopus.buttonPresentationcontrol.pressed.connect(self.presentToggle)
-        self.octopus.buttonQuit.pressed.connect(self.quitexperiment)
         self.octopus.buttonforward.pressed.connect(self.stateforward)
         self.octopus.buttonbackwards.pressed.connect(self.statebackwards)
-        self.octopus.buttonConnectRDA.pressed.connect(self.connectRDA)
-        self.octopus.buttonConnectLibet.pressed.connect(self.connectLibet)
+        
         self.octopus.buttonEOGcorrection.pressed.connect(self.EOGcorrection)
         self.octopus.channel_dropdown.currentIndexChanged.connect(self.change_view_channel)
 
         self.octopus.buttonToggleEOGcorrection.pressed.connect(self.toggleEOGcorrection)
         self.toggle_EOG_correction_text = ['Off', 'On']
 
+        # Menu callbacks:
+        # self.octopus.
+
+        # self.octopus.buttonQuit.pressed.connect(self.quitexperiment)
+        # self.octopus.buttonConnectRDA.pressed.connect(self.connectRDA)
+        # self.octopus.buttonConnectLibet.pressed.connect(self.connectLibet)
+    def open_settings(self):
+        self.octopus.open_settings_gui()
+
+
     def presentToggle(self):
         self.allow_presentation = not self.allow_presentation
         self.ChangeAllowButton()
 
-    def quitexperiment(self):
+    def quit(self):
         self.quit=True
         self.octopus.closeAll()
 

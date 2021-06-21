@@ -34,4 +34,3 @@ Perform technical pilot with yourself as participant
 
 ## QA3:
 What was the deal with the eye artifact removal? How can you verify that it works?
-
