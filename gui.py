@@ -1,10 +1,10 @@
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-
+import callbacks
 import pyqtgraph as pg
-from plot import MplCanvas
-from workers import *
+import plot
+import workers
 import json
 
 class MainWindow(QMainWindow):
@@ -12,8 +12,46 @@ class MainWindow(QMainWindow):
     def __init__(self):
 
         super(MainWindow, self).__init__()
-        self.setFixedSize(1000, 600)
+        self.setFixedSize(1200, 720)
+
+        # Callbacks
+        self.callbacks = callbacks.Callbacks(self)
         # Create App Window
+        # Menu
+        menubar = self.menuBar()
+        # File - Dropdown
+        file_menu = menubar.addMenu('File')
+
+        load_state_button = QAction('Load state', self)
+        file_menu.addAction(load_state_button)
+        # load_state_button.connect(self.callbacks.load_state)
+
+        save_state_button = QAction('Save state', self)
+        file_menu.addAction(save_state_button)
+        # save_state_button.connect(self.callbacks.save_state)
+
+        self.quit_button = QAction('Quit', self)
+        self.quit_button.triggered.connect(self.quit)
+        # self.quit_button.triggered.connect(self.helloworld)
+        
+        file_menu.addAction(self.quit_button)
+        
+
+        # Edit - Dropdown
+        edit_menu = menubar.addMenu('Edit')
+
+        settingsButton = QAction('Settings', self)
+        edit_menu.addAction(settingsButton)
+        settingsButton.triggered.connect(self.callbacks.open_settings)
+
+        # Connections - Dropdown
+        connections_menu = menubar.addMenu('Connections')
+        connect_rda_button = QAction('Connect RDA', self)
+        connections_menu.addAction(connect_rda_button)
+        connect_libet_button = QAction('Connect Libet', self)
+        connections_menu.addAction(connect_libet_button)
+
+        
         # Tabs
         # Initialize tab screen
         self.tabs = QTabWidget()
@@ -37,7 +75,7 @@ class MainWindow(QMainWindow):
         self.title.setText("Lag")
         self.title.setFont(QFont("Times", 12))
         # Bottom Graph
-        self.MplCanvas = MplCanvas(self, width=5, height=4, dpi=100)
+        self.MplCanvas = plot.MplCanvas(self, width=5, height=4, dpi=100)
         # Add label
         self.textBox = QLabel()
         self.textBox.setText("State=")
@@ -45,7 +83,7 @@ class MainWindow(QMainWindow):
         # Add channel dropdown
         self.channel_dropdown = QComboBox()
         # Add buttons
-        self.buttonPresentationcontrol = QPushButton("Allow")
+        self.buttonPresentationcontrol = QPushButton("Disabled")
         self.buttonPresentationcontrol.setStyleSheet("background-color: red")
         self.buttonQuit = QPushButton("Quit")
         self.buttonforward = QPushButton("->")
@@ -53,6 +91,7 @@ class MainWindow(QMainWindow):
         self.buttonEOGcorrection = QPushButton("EOG Correction")
         self.buttonConnectRDA = QPushButton("Connect RDA")
         self.buttonConnectLibet = QPushButton("Connect Libet")
+        self.buttonToggleEOGcorrection = QPushButton("EOG On/Off")
         
         # Button Group
         button_layout = QGridLayout()
@@ -63,6 +102,8 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.buttonConnectRDA, 2, 1)
         button_layout.addWidget(self.buttonConnectLibet, 2, 2)
         button_layout.addWidget(self.buttonEOGcorrection, 2, 0)
+        button_layout.addWidget(self.buttonToggleEOGcorrection, 3, 0)
+        
         # Lag and channel dropdown thing
         second_head_layout = QGridLayout()
         second_head_layout.addWidget(self.title, 0, 0)
@@ -86,18 +127,16 @@ class MainWindow(QMainWindow):
 
         # Neurofeedback Tab
         self.layoutNF = QGridLayout()
-        self.NFCanvas = MplCanvas(self, width=5, height=4, dpi=100)
+        self.NFCanvas = plot.MplCanvas(self, width=5, height=4, dpi=100)
         self.layoutNF.addWidget(self.NFCanvas, 0, 0)
         self.tabNeuroFeedback.setLayout(self.layoutNF)
 
-
-        
-        
-
-        
         self.setCentralWidget(self.tabs)
         # self.mainWidget.setLayout(self.layout)
-    
+    def quit(self):
+        print('pressed quit on menu')
+        self.quit=True
+        self.closeAll()
 class InputDialog(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -176,8 +215,8 @@ class InputDialog(QMainWindow):
         # All entries are there!
         self.parent.run(settings)
 
-class SelectChannels(QWidget):
-    def __init__(self, octopus, parent=None):
+class SelectChannels(QMainWindow):
+    def __init__(self, octopus):
         
         # Check if gatherer is connected at all:
         self.octopus = octopus
@@ -185,15 +224,15 @@ class SelectChannels(QWidget):
             print(f'Cannot call EOG Correction since Gather class is not connected.')
             return
 
-        super().__init__(parent)
-
+        super().__init__(octopus)
+        self.mainWidget = QWidget()
+        self.setCentralWidget(self.mainWidget)
         channelnames = self.octopus.gatherer.channelNames
         
-        self.layout = QVBoxLayout()
+        self.layout = QFormLayout()
         self.text = QLabel()
         self.text.setText('Choose the VEOG channel')
         self.cb1 = QComboBox()
-        # self.cb2 = QComboBox()
         self.buttonGO = QPushButton("GO")
 
         for channelname in channelnames:
@@ -204,17 +243,23 @@ class SelectChannels(QWidget):
         self.layout.addWidget(self.buttonGO)
 
         self.buttonGO.pressed.connect(self.startThread)
+        self.mainWidget.setLayout(self.layout)
 
-        self.setLayout(self.layout)
+        # self.setLayout(self.layout)
         self.setWindowTitle("Select channels for EOG correction")
 
     def startThread(self):
-        worker = EOGWorker(self.octopus.EOGcorrection, self.cb1.currentText())
+        worker = workers.EOGWorker(self.octopus.EOGcorrection, self.cb1.currentText())
         worker.signals.result.connect(self.octopus.plot_eog_results)  
         print("Starting EOG Correction...")
         self.octopus.threadpool.start(worker)
         self.close()
 
+    def accept(self):
+        self.close()
+
+    def reject(self):
+        self.close()
 
 class LoadDialog(QMainWindow):
     def __init__(self, parent=None):
@@ -283,4 +328,4 @@ class LoadDialog(QMainWindow):
                 return
         # All entries are there!
         self.parent.run(settings)       
-  
+

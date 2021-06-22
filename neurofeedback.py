@@ -1,5 +1,5 @@
-from neuroFeedbackViz import BarPlotAnimation, circleAnimation
-from workers import SignallingWorker
+import neuroFeedbackViz as nfv
+import workers
 import numpy as np
 import time
 
@@ -35,8 +35,8 @@ class BaseNeuroFeedback:
         self.args = args
         self.kwargs = kwargs
 
-        self.NF_worker = SignallingWorker(self.update)
-        self.NF_worker.signals.result.connect(BarPlotAnimation)  # circleAnimation
+        self.NF_worker = workers.SignallingWorker(self.update)
+        self.NF_worker.signals.result.connect(nfv.BarPlotAnimation)  # nfv.circleAnimation
         self.threadpool.start(self.NF_worker)
     
     def calibrate(self, dataMemory, blockMemory):

@@ -1,25 +1,24 @@
-from socket import AF_INET, SOCK_STREAM
+from socket import AF_INET, SOCK_STREAM, gethostbyname, gethostname
 import socket
-from tcp import CustomSocket
-from util import gui_retry_cancel
+import tcp
 import select
 import time
 
 class TCP:
-    def __init__(self, IP='192.168.2.122', port=5005, BufferSize=1024, \
+    def __init__(self, IP='10.16.5.93', port=5005, BufferSize=1024, \
         encoding='utf-8', timeout=5):
         ''' This method creates an internal socket connection which enables 
         communication between this neurofeedback program and the libet stimulus
         presentation program. 
         '''
         
-        self.IP = IP
+        self.IP = gethostbyname(gethostname())
         self.port = port
         self.BufferSize = BufferSize
         
         self.encoding = encoding
         self.timeout = timeout
-        self.socket = CustomSocket(AF_INET, SOCK_STREAM)
+        self.socket = tcp.CustomSocket(AF_INET, SOCK_STREAM)
         self.socket.settimeout(self.timeout)
         self.connected = False
         self.retryText = ('Try again?', 'Connection to TCP of Libet PC could not be established.')
@@ -136,7 +135,7 @@ class StimulusCommunication(TCP):
     
     def quit(self):
         self.connected = False
-        self.con.close()
+        self.socket.close()
     
     def communicateQuit(self):
         # Send message to libet presentation that the experiment is over

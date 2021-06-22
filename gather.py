@@ -1,12 +1,11 @@
-from socket import *
-from struct import *
+import socket
+# from struct import *
 import numpy as np
 import time
-from util import *
+import util
 
 class Gather:
-    def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
-        sockettimeout=0.1):
+    def __init__(self, port=51244, sockettimeout=0.1):
         ''' 
         Parameters:
         -----------
@@ -38,7 +37,7 @@ class Gather:
 
         # Data TCP Connection (with PC that sends RDA)
         self.connected = False
-        self.ip = ip
+        self.ip = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
@@ -55,7 +54,7 @@ class Gather:
         #             return
 
         print(f'Attempting connection to RDA {self.ip} {self.port}...')
-        self.con = socket(AF_INET, SOCK_STREAM)
+        self.con = socket.socket(AF_INET, SOCK_STREAM)
         self.con.settimeout(self.sockettimeout)
 
         try:
@@ -299,8 +298,8 @@ class Gather:
             self.blockSize = len(self.data)
 
         assert self.blockSize == len(self.data.flatten()) / self.channelCount, "blockSize is supposed to be {} but data was of size {}".format(self.blockSize, len(self.data))
-        self.dataMemory = insert(self.dataMemory, self.data)
-        self.blockMemory = insert(self.blockMemory, self.block_counter)
+        self.dataMemory = util.insert(self.dataMemory, self.data)
+        self.blockMemory = util.insert(self.blockMemory, self.block_counter)
         self.blockMemory = np.squeeze(self.blockMemory)
 
     def quit(self):
@@ -309,7 +308,7 @@ class Gather:
 
 
 class DummyGather:
-    def __init__(self, ip="192.168.2.122", port=51244, targetMarker='response',
+    def __init__(self, port=51244, targetMarker='response',
         sockettimeout=0.1):
         ''' 
         Parameters:
@@ -341,7 +340,7 @@ class DummyGather:
 
         # Data TCP Connection (with PC that sends RDA)
         self.connected = False
-        self.ip = ip
+        self.ip = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
@@ -462,7 +461,7 @@ class DummyGather:
             self.startTime = time.time()
 
         # Extract eeg data as array of floats
-        self.data = np.random.randn(self.channelCount, self.blockSize)
+        self.data = np.cumsum(np.random.randn(self.channelCount, self.blockSize), axis=1)
         for i in range(self.channelCount):
             self.data[i, :] = np.cumsum(self.data[i, :])
         # Preprocessing (rereferencing, ...)
@@ -471,7 +470,7 @@ class DummyGather:
         # Some stochastically ocurring eye artifacts
         if np.random.rand(1) < 0.05:
             eog_idx = self.channelNames.index('VEOG')
-            self.data[eog_idx, :] = pulse(self.blockSize) * 50
+            self.data[eog_idx, :] = util.pulse(self.blockSize) * 50
             for i in range(self.channelCount):
                 if i != eog_idx:
                     self.data[i, :] += self.data[eog_idx, :] * self.d
@@ -499,8 +498,8 @@ class DummyGather:
             self.blockSize = len(self.data)
 
         assert self.blockSize == len(self.data.flatten()) / self.channelCount, "blockSize is supposed to be {} but data was of size {}".format(self.blockSize, len(self.data))
-        self.dataMemory = insert(self.dataMemory, self.data)
-        self.blockMemory = insert(self.blockMemory, self.block_counter)
+        self.dataMemory = util.insert(self.dataMemory, self.data)
+        self.blockMemory = util.insert(self.blockMemory, self.block_counter)
         self.blockMemory = np.squeeze(self.blockMemory)
 
     def quit(self):
@@ -524,6 +523,3 @@ class DummyCon:
         self.connected = False
 
 
-# gatherer = Gather()
-# gatherer.connect()
-# gatherer.gather_data()

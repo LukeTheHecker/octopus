@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, TextBox
 import numpy as np
 from numpy.core.shape_base import block
-from util import *
+# from util import *
 import seaborn as sns
 
 import matplotlib
@@ -52,8 +52,13 @@ class DataMonitor:
         self.widget.setXRange(np.min(self.time), np.max(self.time), padding=0)
         self.widget.setYRange(self.ylim[0], self.ylim[1], padding=0)
 
-    def update(self, gatherer, d_est, viewChannel):
-        ''' This method takes a data_package and plots it at the appropriate position in the data monitor plot
+        self.widget.enableAutoRange('y', enable=True)
+        self.widget.setAutoVisible(y=True)
+
+    # def update(self, gatherer, d_est, viewChannel):
+    def update(self, octopus):
+        ''' This method takes a data_package and plots it at the appropriate position in the data monitor plot. 
+            This function is called every 20 ms.
         Parameters:
         -----------
         data_package : list/numpy.ndarray, next data pack
@@ -61,6 +66,11 @@ class DataMonitor:
         Return:
         -------
         '''
+        gatherer = octopus.gatherer
+        d_est = octopus.d_est
+        toggle_EOG_correction = octopus.toggle_EOG_correction
+        viewChannel = octopus.viewChannel
+        
         if viewChannel is not None:
             self.viewChannel = viewChannel
 
@@ -70,7 +80,8 @@ class DataMonitor:
         dataMemory = gatherer.dataMemory[self.viewChannelIndex, :]
         eogMemory = gatherer.dataMemory[self.EOGChannelIndex, :]
         # Correct EOG
-        dataMemory = dataMemory - (eogMemory * d_est[self.viewChannelIndex])
+        if toggle_EOG_correction:
+            dataMemory = dataMemory - (eogMemory * d_est[self.viewChannelIndex])
         IncomingBlockMemory = gatherer.blockMemory
         lagtime = gatherer.lag_s
 
@@ -109,7 +120,8 @@ class DataMonitor:
 
         # If one window is full, start again on left side
         if new_win: # and self.blockCount != 0:
-            self.widget.enableAutoRange('y', False)
+            self.widget.enableAutoRange('y', enable=True)
+            self.widget.setAutoVisible(y=True)
             self.time = np.linspace(self.n_window*self.window_len_s, (self.n_window + 1)*self.window_len_s, self.window_size)
             # New x and y limits
             # new_limits = self.decide_ylimits()

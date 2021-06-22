@@ -1,32 +1,43 @@
 import numpy as np
 import random
-from gui import SelectChannels
-
+import gui
 
 class Callbacks:
     def __init__(self, octopus):
-        self.allow_presentation = False
-        self.permission_statement = ['Allow', 'Forbid']
-        self.buttonColor = ["background-color: red", "background-color: green"]
-        self.quit = False
-        self.stateChange = 0
+        pass
+        # self.allow_presentation = False
+        # self.permission_statement = ['Disabled', 'Enabled']
+        # self.buttonColor = ["background-color: red", "background-color: green"]
+        # self.quit = False
+        # self.stateChange = 0
         self.octopus = octopus
 
-        self.octopus.buttonPresentationcontrol.pressed.connect(self.presentToggle)
-        self.octopus.buttonQuit.pressed.connect(self.quitexperiment)
-        self.octopus.buttonforward.pressed.connect(self.stateforward)
-        self.octopus.buttonbackwards.pressed.connect(self.statebackwards)
-        self.octopus.buttonConnectRDA.pressed.connect(self.connectRDA)
-        self.octopus.buttonConnectLibet.pressed.connect(self.connectLibet)
-        self.octopus.buttonEOGcorrection.pressed.connect(self.EOGcorrection)
-        self.octopus.channel_dropdown.currentIndexChanged.connect(self.change_view_channel)
+        # self.octopus.buttonPresentationcontrol.pressed.connect(self.presentToggle)
+        # self.octopus.buttonforward.pressed.connect(self.stateforward)
+        # self.octopus.buttonbackwards.pressed.connect(self.statebackwards)
+        
+        # self.octopus.buttonEOGcorrection.pressed.connect(self.EOGcorrection)
+        # self.octopus.channel_dropdown.currentIndexChanged.connect(self.change_view_channel)
+
+        # self.octopus.buttonToggleEOGcorrection.pressed.connect(self.toggleEOGcorrection)
+        # self.toggle_EOG_correction_text = ['Off', 'On']
+
+        # Menu callbacks:
+        # self.octopus.
+
+        # self.octopus.buttonQuit.pressed.connect(self.quitexperiment)
+        # self.octopus.buttonConnectRDA.pressed.connect(self.connectRDA)
+        # self.octopus.buttonConnectLibet.pressed.connect(self.connectLibet)
+    def open_settings(self):
+        self.octopus.open_settings_gui()
+
 
     def presentToggle(self):
         self.allow_presentation = not self.allow_presentation
         self.ChangeAllowButton()
 
-    def quitexperiment(self):
-        print("pressed")
+    def quit(self):
+        print('pressed quit on menu')
         self.quit=True
         self.octopus.closeAll()
 
@@ -85,10 +96,20 @@ class Callbacks:
     def EOGcorrection(self):
         if self.octopus.gatherer.connected:
             print('Starting EOG Correction')
-            mydialog = SelectChannels(self.octopus)
+            mydialog = gui.SelectChannels(self.octopus)
             mydialog.show()
         else:
             print('EOG correction is not possible until gatherer is connected to RDA.')
+    
+    def toggleEOGcorrection(self):
+        ''' Toggle EOG correction on/off'''
+        # Toggle EOG correction
+        self.octopus.toggle_EOG_correction = not self.octopus.toggle_EOG_correction
+        # Change Button label accordingly
+        self.octopus.buttonToggleEOGcorrection.setText(self.toggle_EOG_correction_text[int(self.octopus.toggle_EOG_correction)])
+        # Change Button color accordingly
+        self.octopus.buttonToggleEOGcorrection.setStyleSheet(self.buttonColor[int(self.octopus.toggle_EOG_correction)])
+
 
     def change_view_channel(self):
         print(f'Changed viewchannel for data monitor from {self.octopus.viewChannel} to {self.octopus.channel_dropdown.currentText()}')

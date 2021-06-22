@@ -1,37 +1,34 @@
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-from matplotlib.pyplot import axes
-import pyqtgraph as pg
 
 import matplotlib.pyplot as plt
-from callbacks import Callbacks
-from gather import Gather, DummyGather
-from plot import DataMonitor, HistMonitor
-from neurofeedback import BaseNeuroFeedback
-from gui import *
-from neuroFeedbackViz import BarPlotAnimation, circleAnimation
-from util import calc_error, gradient_descent, freq_band_power
-from communication import StimulusCommunication
+import callbacks
+import gather
+import plot
+import neurofeedback
+import gui
+import neuroFeedbackViz as nfv
+import util
+import communication
 import time
 import numpy as np
 import os
 import json
 import random
-from workers import *
+import workers
 from copy import deepcopy
 from scipy.signal import detrend
-
 from nolds import dfa
 
-class Octopus(MainWindow):
+class Octopus(gui.MainWindow):
     def __init__(self):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
         '''
         super(Octopus, self).__init__()
         # Initialize callbacks
-        self.callbacks = Callbacks(self)
+        self.callbacks = callbacks.Callbacks(self)
         # Open Settings GUI
         self.open_settings_gui()
         
@@ -41,6 +38,7 @@ class Octopus(MainWindow):
         self.communicate_quit_code = 2
         self.EOGCorrectionDuration = 10
         self.d_est = np.zeros(100)
+        self.toggle_EOG_correction = True
         self.responded = False
         self.current_state = 0
         self.get_statelist()
@@ -48,7 +46,7 @@ class Octopus(MainWindow):
         print('Initialized Octopus')
     
     def open_settings_gui(self):
-        mydialog = InputDialog(self)
+        mydialog = gui.InputDialog(self)
         mydialog.show()
     
     def saveSettings(self, settings):
@@ -90,32 +88,37 @@ class Octopus(MainWindow):
         self.read_blinded_conditions()
 
         # Objects 
-        self.gatherer = DummyGather() # Gather()
+        self.gatherer = gather.DummyGather() 
+        # self.gatherer = gather.Gather()
         self.callbacks.connectRDA()
-        self.internal_tcp = StimulusCommunication(self)
+        self.internal_tcp = communication.StimulusCommunication(self)
         
         # Data Monitors
         self.plotsReady = False
         self.init_plots()
 
+        # Timer: Like a scheduler that runs functions after a given interval
         # Set timer for GUI-related tasks:
         self.timer = QTimer()
         self.timer.setInterval(100)  # every 100 ms it is called
         self.timer.timeout.connect(self.GUI_routines)
         self.timer.start()
         
+        # Set timer for the Data Monitor plot
         self.plotTimer = QTimer()
         self.plotTimer.setInterval(20)  # every 20 ms it is called
         self.plotTimer.timeout.connect(self.data_monitor_update)
         self.plotTimer.start()
 
-        # Threading:
-        self.worker_gatherer = Worker(self.gatherer.gather_data)
-        self.worker_communication = SignallingWorker(self.internal_tcp.communication_routines)
-        self.worker_communication.signals.result.connect(self.response_triggered)  
-        
-        
+        # Threading: Worker call functions  asynchronously
+
+        # Worker: Data Gatherer (which reads data from brain vision RDA via TCP)
+        self.worker_gatherer = workers.Worker(self.gatherer.gather_data)
         self.threadpool.start(self.worker_gatherer)
+        
+        # Worker: Signalling (Sends signals to the stimulus presentation program)
+        self.worker_communication = workers.SignallingWorker(self.internal_tcp.communication_routines)
+        self.worker_communication.signals.result.connect(self.response_triggered)  
         self.threadpool.start(self.worker_communication)
         
     def init_plots(self):
@@ -128,24 +131,25 @@ class Octopus(MainWindow):
             return
 
         if self.gatherer.connected:
-            self.data_monitor = DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
+            self.data_monitor = plot.DataMonitor(self.gatherer.sr, self.gatherer.blockSize, 
                 curve=self.curve1, widget=self.graphWidget1, title=self.title, 
                 viewChannel=self.viewChannel, EOGChannelIndex=self.EOGChannelIndex,
                 blinder=self.blinder)
             
-            self.hist_monitor = HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
+            self.hist_monitor = plot.HistMonitor(self.gatherer.sr, canvas=self.MplCanvas, 
                 SCPTrialDuration=self.SCPTrialDuration, 
                 channelOfInterestIdx=self.channelOfInterestIdx,
                 EOGChannelIndex=self.EOGChannelIndex, blinder=self.blinder)
 
-            self.startNeurofeedbacks()
+            # self.startNeurofeedbacks()
             self.plotsReady = True
         else:
             self.plotsReady = False
 
     def data_monitor_update(self):
         if self.plotsReady:
-            self.data_monitor.update(self.gatherer, self.d_est, self.viewChannel)
+            # self.data_monitor.update(self.gatherer, self.d_est, self.viewChannel)
+            self.data_monitor.update(self)
         else:
             # Plots not ready - sleep a bit!
             time.sleep(0.25)
@@ -294,6 +298,8 @@ class Octopus(MainWindow):
         if not os.path.isdir('states/'):
             # If there is no folder to store states in -> create it
             os.mkdir('states/')
+        if not hasattr(self, 'hist_monitor'):
+            return
 
         State = {'scpAveragesList': list(self.hist_monitor.scpAveragesList), 
                 'current_state':int(self.current_state), 
@@ -314,12 +320,12 @@ class Octopus(MainWindow):
             print("This is a new participant.")
             self.save()
         else:
-            self.loadDialog = LoadDialog(self)
+            self.loadDialog = gui.LoadDialog(self)
             self.loadDialog.show()
 
     def closeAll(self):
         # Save experiment
-        print("stopping")
+        print("Closing Octopus")
         self.save()
         # close routines
         self.plotTimer.stop()
@@ -355,7 +361,7 @@ class Octopus(MainWindow):
         d_est = []
         for idx in range(data.shape[0]):
             scaler = amplitudeRatios[idx]
-            tmp_d_est = gradient_descent(calc_error, EOG*scaler, data[idx, :])
+            tmp_d_est = util.gradient_descent(util.calc_error, EOG*scaler, data[idx, :], max_iter=100000)
             tmp_d_est *= scaler
             d_est.append(tmp_d_est)
         
@@ -382,21 +388,21 @@ class Octopus(MainWindow):
         maxlim = np.max( [np.max(EOG), np.max(COI - (EOG * d)), np.max(COI)] )
         ylim = (minlim, maxlim)
 
-        error_uncleaned = calc_error(EOG, COI, 0)
-        error_cleaned = calc_error(EOG, COI, d)
+        error_uncleaned = util.calc_error(EOG, COI, 0)
+        error_cleaned = util.calc_error(EOG, COI, d)
 
         plt.figure(num=42)
         plt.subplot(311)
         plt.plot(EOG)
-        plt.ylim(ylim)
+        # plt.ylim(ylim)
         plt.title("EOG")
         plt.subplot(312)
         plt.plot(COI)
-        plt.ylim(ylim)
+        # plt.ylim(ylim)
         plt.title(f"Channel of interest ({self.channelOfInterestName})")
         plt.subplot(313)
         plt.plot(COI - (EOG * d))
-        plt.ylim(ylim)
+        # plt.ylim(ylim)
         title = f"Cleaned COI with d={d:.2f}. Reduced corr from {error_uncleaned:.2f} to {error_cleaned:.2f}"
         plt.title(title)
         plt.tight_layout(pad=2)
@@ -404,21 +410,10 @@ class Octopus(MainWindow):
 
     def startNeurofeedbacks(self):
         # Frequency Band Power Neurofeedback:
-        channelsOfInterest = ['Cz', 'TP9']
-        freqs = (8, 13)  # low and high frequency for the bandpass filter
+        channelsOfInterest = ['Cz']
+        freqs = (15, 30)  # low and high frequency for the bandpass filter
         sr = self.gatherer.sr
-        fun = freq_band_power
-        self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, freqs, sr, timeRangeProcessed=0.25, 
+        fun = util.freq_band_power
+        self.NF_alpha = neurofeedback.BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, freqs, sr, timeRangeProcessed=0.25, 
             channelsOfInterest=channelsOfInterest)
-
-        # Detrended Fluctuation Analysis Exponent
-        # channelsOfInterest = ['Cz']
-        # fun = dfa
-        # self.NF_alpha = BaseNeuroFeedback(fun, self.NFCanvas, self.threadpool, self.gatherer, timeRangeProcessed=0.25, 
-        #     channelsOfInterest=channelsOfInterest, fit_exp='poly')
-
-    
-           
-
-
-
+     

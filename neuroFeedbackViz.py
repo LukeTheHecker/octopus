@@ -1,7 +1,6 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import numpy as np
 
 ''' The following functions are animations that are bound to the BaseNeuroFeedback 
 class and they expect the result of the BaseNeuroFeedback::update method as input argument. 
