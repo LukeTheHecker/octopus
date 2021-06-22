@@ -4,3 +4,4 @@
 states/*
 _*_.py
 data
+.vscode

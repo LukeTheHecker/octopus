@@ -1,12 +1,11 @@
 # Current Issues
 
-## I1: Quit Button dysfunctional
-### Description 
-When pressing quit the program halts and throws an error that some connection is not correct.
+
 
 ## I2: Form on startup does not know which channels are available
 ### Description:
 When octopus starts it asks for SCP channel and reference channels, however these are sometimes unknon, sometimes no extra reference channel may be required. 
+
 ### Solution:
 * Give the user more options by allowing no reference channels
 * Be smart and check if "Cz" is present as SCP channel, otherwise auto-select a channel that is present such that it technically works.
@@ -34,3 +33,9 @@ Perform technical pilot with yourself as participant
 
 ## QA3:
 What was the deal with the eye artifact removal? How can you verify that it works?
+
+
+# Solved
+## I1: Quit Button dysfunctional
+### Description 
+When pressing quit the program halts and throws an error that some connection is not correct.

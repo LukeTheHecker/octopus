@@ -1,11 +1,12 @@
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-import callbacks
+# import callbacks
 import pyqtgraph as pg
 import plot
 import workers
 import json
+import numpy as np
 
 class MainWindow(QMainWindow):
     ''' Main Window of the Octopus Neurofeedback App. '''
@@ -15,42 +16,43 @@ class MainWindow(QMainWindow):
         self.setFixedSize(1200, 720)
 
         # Callbacks
-        self.callbacks = callbacks.Callbacks(self)
+        # self.callbacks = callbacks.Callbacks(self)
         # Create App Window
         # Menu
         menubar = self.menuBar()
-        # File - Dropdown
+        # File - Menu
         file_menu = menubar.addMenu('File')
 
-        load_state_button = QAction('Load state', self)
-        file_menu.addAction(load_state_button)
-        # load_state_button.connect(self.callbacks.load_state)
+        self.load_state_button = QAction('Load state', self)
+        file_menu.addAction(self.load_state_button)
 
-        save_state_button = QAction('Save state', self)
-        file_menu.addAction(save_state_button)
-        # save_state_button.connect(self.callbacks.save_state)
+        self.save_state_button = QAction('Save state', self)
+        file_menu.addAction(self.save_state_button)
 
         self.quit_button = QAction('Quit', self)
-        self.quit_button.triggered.connect(self.quit)
-        # self.quit_button.triggered.connect(self.helloworld)
-        
         file_menu.addAction(self.quit_button)
         
-
-        # Edit - Dropdown
+        # Edit - Menu
         edit_menu = menubar.addMenu('Edit')
 
-        settingsButton = QAction('Settings', self)
-        edit_menu.addAction(settingsButton)
-        settingsButton.triggered.connect(self.callbacks.open_settings)
+        self.settingsButton = QAction('Settings', self)
+        edit_menu.addAction(self.settingsButton)
+        
 
-        # Connections - Dropdown
+        # Connections - Menu
         connections_menu = menubar.addMenu('Connections')
-        connect_rda_button = QAction('Connect RDA', self)
-        connections_menu.addAction(connect_rda_button)
-        connect_libet_button = QAction('Connect Libet', self)
-        connections_menu.addAction(connect_libet_button)
 
+        self.connect_rda_button = QAction('Connect RDA', self)
+        connections_menu.addAction(self.connect_rda_button)
+
+        self.connect_libet_button = QAction('Connect Libet', self)
+        connections_menu.addAction(self.connect_libet_button)
+
+
+        # Tools - Menu
+        tools_menu = menubar.addMenu('Tools')
+        self.eog_correction_button = QAction('EOG Correction', self)
+        tools_menu.addAction(self.eog_correction_button)
         
         # Tabs
         # Initialize tab screen
@@ -83,34 +85,32 @@ class MainWindow(QMainWindow):
         # Add channel dropdown
         self.channel_dropdown = QComboBox()
         # Add buttons
+        # Button for presentation control
+        self.buttonColor = ["background-color: red", "background-color: green"]
+        self.permission_statement = ['Disabled', 'Enabled']
+        self.allow_presentation = False
         self.buttonPresentationcontrol = QPushButton("Disabled")
         self.buttonPresentationcontrol.setStyleSheet("background-color: red")
-        self.buttonQuit = QPushButton("Quit")
+        # Buttons for state changes:
         self.buttonforward = QPushButton("->")
         self.buttonbackwards = QPushButton("<-")
-        self.buttonEOGcorrection = QPushButton("EOG Correction")
-        self.buttonConnectRDA = QPushButton("Connect RDA")
-        self.buttonConnectLibet = QPushButton("Connect Libet")
-        self.buttonToggleEOGcorrection = QPushButton("EOG On/Off")
+
         
         # Button Group
         button_layout = QGridLayout()
         button_layout.addWidget(self.buttonPresentationcontrol, 0, 0, 1, 3)
-        button_layout.addWidget(self.buttonQuit, 1, 2)
+        # button_layout.addWidget(self.buttonQuit, 1, 2)
         button_layout.addWidget(self.buttonforward, 1, 1)
         button_layout.addWidget(self.buttonbackwards, 1, 0)
-        button_layout.addWidget(self.buttonConnectRDA, 2, 1)
-        button_layout.addWidget(self.buttonConnectLibet, 2, 2)
-        button_layout.addWidget(self.buttonEOGcorrection, 2, 0)
-        button_layout.addWidget(self.buttonToggleEOGcorrection, 3, 0)
-        
+
         # Lag and channel dropdown thing
         second_head_layout = QGridLayout()
         second_head_layout.addWidget(self.title, 0, 0)
         second_head_layout.addWidget(self.channel_dropdown, 0, 1)
-        # button_layout2 = QGridLayout()
-        # button_layout2.addWidget(self.buttonPresentationcontrol, 0, 0, 1, 3)
-        # button_layout2.addWidget(self.buttonQuit, 1, 2)
+
+
+        # Connect actions to buttons:
+        self._connectActions()
 
         # Layout
         self.layout = QGridLayout()
@@ -133,10 +133,111 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.tabs)
         # self.mainWidget.setLayout(self.layout)
+
+    def _connectActions(self):
+        # Connect buttons/ menu with actions (methods/functions)
+        
+        # Menu Buttons
+        self.quit_button.triggered.connect(self.quit)
+        self.load_state_button.triggered.connect(self.load)
+        self.save_state_button.triggered.connect(self.save)
+        self.settingsButton.triggered.connect(self.open_settings_gui)
+        self.connect_rda_button.triggered.connect(self.connect_rda)
+        self.connect_libet_button.triggered.connect(self.connect_libet)
+        self.eog_correction_button.triggered.connect(self.eog_correction)
+        # On-GUI Buttons
+        self.buttonPresentationcontrol.pressed.connect(self.presentToggle)
+        self.buttonforward.pressed.connect(self.stateforward)
+        self.buttonbackwards.pressed.connect(self.statebackwards)
+
+     
+    def open_settings_gui(self):
+        mydialog = InputDialog(self)
+        mydialog.show()
+
+    def presentToggle(self):
+        self.allow_presentation = not self.allow_presentation
+        self.change_allow_button()
+    
     def quit(self):
-        print('pressed quit on menu')
         self.quit=True
         self.closeAll()
+    
+
+    def stateforward(self):
+        self.stateChange = 1
+        self.switchState()
+        
+    def statebackwards(self):
+        self.stateChange = -1
+        self.switchState()
+    
+    def switchState(self):
+        new_state = np.clip(self.current_state + self.stateChange, a_min = 0, a_max = 5)
+        # If state hasnt actually changed return
+        if new_state == self.current_state:
+            return
+        
+        # Otherwise..
+        # Forbid experiment and change button color + text if state actually changed
+        self.allow_presentation = False
+        self.change_allow_button()
+        # Save new state
+        self.current_state = new_state
+        self.stateChange = 0
+
+    def change_allow_button(self):
+        i = int(self.allow_presentation)
+        self.buttonPresentationcontrol.setStyleSheet(self.buttonColor[i])
+        self.buttonPresentationcontrol.setText(self.permission_statement[i])
+
+    def connect_rda(self):
+        if hasattr(self, 'gatherer'):
+            result = self.gatherer.connect()
+        else:
+            return False
+
+        if result:
+            self.gatherer.refChannels = self.refChannels
+            self.EOGChannelIndex = self.gatherer.channelNames.index(self.EOGChannelName)
+            self.d_est = np.zeros(len(self.gatherer.channelNames))
+            self.handleChannelIndex() 
+            self.fillChannelDropdown()
+            self.init_plots()
+            
+            
+        return result
+    
+    def connect_libet(self):
+        if hasattr(self, 'internal_tcp'):
+            if not self.internal_tcp.connected:
+                print(f'Attempting connection to {self.internal_tcp.IP} {self.internal_tcp.port}...')
+                self.internal_tcp.accept_connection()
+                if self.internal_tcp.connected:
+                    self.threadpool.start(self.worker_communication)
+
+    def eog_correction(self):
+        if self.gatherer.connected:
+            print('Starting EOG Correction')
+            mydialog = SelectChannels(self)
+            mydialog.show()
+        else:
+            print('EOG correction is not possible until gatherer is connected to RDA.')
+    
+    def toggle_eog_correction(self):
+        ''' Toggle EOG correction on/off'''
+        # Toggle EOG correction
+        self.toggle_EOG_correction = not self.toggle_EOG_correction
+        # Change Button label accordingly
+        self.buttontoggle_eog_correction.setText(self.toggle_EOG_correction_text[int(self.toggle_EOG_correction)])
+        # Change Button color accordingly
+        self.buttontoggle_eog_correction.setStyleSheet(self.buttonColor[int(self.toggle_EOG_correction)])
+
+
+    def change_view_channel(self):
+        print(f'Changed viewchannel for data monitor from {self.viewChannel} to {self.channel_dropdown.currentText()}')
+        self.viewChannel = self.channel_dropdown.currentText()
+
 class InputDialog(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -270,7 +371,7 @@ class LoadDialog(QMainWindow):
 
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
-        title = f'Alert!'
+        title = f'Obacht!'
         self.setWindowTitle(title)
         
         self.buttonBox  = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.No)

@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 
 import matplotlib.pyplot as plt
-import callbacks
 import gather
 import plot
 import neurofeedback
@@ -22,13 +21,15 @@ from scipy.signal import detrend
 from nolds import dfa
 
 class Octopus(gui.MainWindow):
+    """ The Octopus class constitutes the Model of the "Model ViewController"
+    architecture of this application. """
     def __init__(self):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
         '''
         super(Octopus, self).__init__()
         # Initialize callbacks
-        self.callbacks = callbacks.Callbacks(self)
+        # self.callbacks = callbacks.Callbacks(self)
         # Open Settings GUI
         self.open_settings_gui()
         
@@ -44,10 +45,6 @@ class Octopus(gui.MainWindow):
         self.get_statelist()
         self.quit = False
         print('Initialized Octopus')
-    
-    def open_settings_gui(self):
-        mydialog = gui.InputDialog(self)
-        mydialog.show()
     
     def saveSettings(self, settings):
         ''' Save the settings entered by the User on startup of the program.'''
@@ -90,7 +87,7 @@ class Octopus(gui.MainWindow):
         # Objects 
         self.gatherer = gather.DummyGather() 
         # self.gatherer = gather.Gather()
-        self.callbacks.connectRDA()
+        self.connect_rda()
         self.internal_tcp = communication.StimulusCommunication(self)
         
         # Data Monitors
@@ -186,19 +183,19 @@ class Octopus(gui.MainWindow):
             self.check_if_interview()
             if self.go_interview:
                 self.current_state += 1
-                self.callbacks.presentToggle()
+                self.presentToggle()
                 
         if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.samplingCrit:
             self.current_state = 1
             self.hist_monitor.current_state = self.current_state
             # self.textbox.statusBox.set_text(f"State={self.current_state}")
         
-        if (self.current_state == 2 or self.current_state == 4) and self.callbacks.allow_presentation:
+        if (self.current_state == 2 or self.current_state == 4) and self.allow_presentation:
             # Interview must be over
             print("Interview is over, lets continue!")
             self.current_state += 1
 
-        if self.current_state == 5 or self.callbacks.quit == True:
+        if self.current_state == 5 or self.quit == True:
             self.closeAll()
 
         self.textBox.setText(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
