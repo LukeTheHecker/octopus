@@ -21,8 +21,7 @@ When octopus starts it asks for SCP channel and reference channels, however thes
 * Add basic recording parameters as text on the UI:
 1000Hz - 32 Channels - 
 
-## F3: Folder structure
-Separate code repository from general files like you do for a python package.
+
 
 # Qualitiy Assurance
 ## QA1:
@@ -39,3 +38,6 @@ What was the deal with the eye artifact removal? How can you verify that it work
 ## I1: Quit Button dysfunctional
 ### Description 
 When pressing quit the program halts and throws an error that some connection is not correct.
+
+## F3: Folder structure
+Separate code repository from general files like you do for a python package.

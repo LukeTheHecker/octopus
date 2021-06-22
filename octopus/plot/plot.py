@@ -56,7 +56,7 @@ class DataMonitor:
         self.widget.setAutoVisible(y=True)
 
     # def update(self, gatherer, d_est, viewChannel):
-    def update(self, octopus):
+    def update(self, model):
         ''' This method takes a data_package and plots it at the appropriate position in the data monitor plot. 
             This function is called every 20 ms.
         Parameters:
@@ -66,10 +66,10 @@ class DataMonitor:
         Return:
         -------
         '''
-        gatherer = octopus.gatherer
-        d_est = octopus.d_est
-        toggle_EOG_correction = octopus.toggle_EOG_correction
-        viewChannel = octopus.viewChannel
+        gatherer = model.gatherer
+        d_est = model.d_est
+        toggle_EOG_correction = model.toggle_EOG_correction
+        viewChannel = model.viewChannel
         
         if viewChannel is not None:
             self.viewChannel = viewChannel

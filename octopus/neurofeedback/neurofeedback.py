@@ -1,5 +1,5 @@
-import neuroFeedbackViz as nfv
-import workers
+from  octopus import neurofeedbackviz as nfv
+from octopus import workers
 import numpy as np
 import time
 

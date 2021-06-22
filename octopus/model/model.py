@@ -3,31 +3,32 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 
 import matplotlib.pyplot as plt
-import gather
-import plot
-import neurofeedback
-import gui
-import neuroFeedbackViz as nfv
-import util
-import communication
+from octopus import gather
+from octopus import plot
+from octopus import neurofeedback
+from octopus import gui
+from octopus import neurofeedbackviz as nfv
+from octopus import util
+from octopus import workers
+from octopus import communication
+
 import time
 import numpy as np
 import os
 import json
 import random
-import workers
 from copy import deepcopy
 from scipy.signal import detrend
 from nolds import dfa
 
-class Octopus(gui.MainWindow):
-    """ The Octopus class constitutes the Model of the "Model ViewController"
+class Model(gui.MainWindow):
+    """ The Model class constitutes the Model of the "Model ViewController"
     architecture of this application. """
     def __init__(self):
         ''' Meta class that handles data collection, plotting and actions of the 
             SCP Libet Neurofeedback Experiment.
         '''
-        super(Octopus, self).__init__()
+        super(Model, self).__init__()
         # Initialize callbacks
         # self.callbacks = callbacks.Callbacks(self)
         # Open Settings GUI
@@ -347,9 +348,8 @@ class Octopus(gui.MainWindow):
         EOG = detrend(EOG)  # try to eliminate drifts etc
 
         # 4) Calculate ratio of rms between EOG and other channels
-        from util import rms
-        rms_eog = rms(EOG)
-        rms_chans = [rms(dat) for i, dat in enumerate(data)]
+        rms_eog = util.rms(EOG)
+        rms_chans = [util.rms(dat) for i, dat in enumerate(data)]
         
         amplitudeRatios = [rms_chan / rms_eog for rms_chan in rms_chans]
 

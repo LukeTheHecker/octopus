@@ -2,6 +2,6 @@
 *.pkl
 *.ipynb
 states/*
-_*_.py
+__pycache__
 data
 .vscode

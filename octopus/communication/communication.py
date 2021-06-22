@@ -1,6 +1,6 @@
 from socket import AF_INET, SOCK_STREAM, gethostbyname, gethostname
 import socket
-import tcp
+from octopus import tcp
 import select
 import time
 
@@ -60,9 +60,9 @@ class TCP:
         self.con.close()
 
 class StimulusCommunication(TCP):
-    def __init__(self, octopus, **kwargs):
+    def __init__(self, model, **kwargs):
         super(StimulusCommunication, self).__init__(**kwargs)
-        self.octopus = octopus
+        self.model = model
     
     def communication_routines(self):
         self.communicate_state()
@@ -86,9 +86,9 @@ class StimulusCommunication(TCP):
             # If connection is running
             try:
                 msg_libet = self.read_from_socket()
-                if msg_libet.decode(self.encoding) == self.octopus.targetMarker or self.octopus.targetMarker in msg_libet.decode(self.encoding):
+                if msg_libet.decode(self.encoding) == self.model.targetMarker or self.model.targetMarker in msg_libet.decode(self.encoding):
                     print('Response!')                
-                    self.octopus.checkState(recent_response=True)
+                    self.model.checkState(recent_response=True)
                     return True
                 else:
                     return False
@@ -111,7 +111,7 @@ class StimulusCommunication(TCP):
         if val is None:
             try:
                 # Send Current state (allow or forbid) to the libet presentation
-                allow_presentation = self.octopus.callbacks.allow_presentation
+                allow_presentation = self.model.callbacks.allow_presentation
                 msg = int(allow_presentation).to_bytes(1, byteorder='big')
                 self.con.send(msg)
                 # print(f'sent {int(allow_presentation)} to libet PC')
@@ -140,14 +140,14 @@ class StimulusCommunication(TCP):
     def communicateQuit(self):
         # Send message to libet presentation that the experiment is over
         self.con.setblocking(0)
-        self.communicate_state(val=self.octopus.communicate_quit_code)
+        self.communicate_state(val=self.model.communicate_quit_code)
 
         response = self.read_from_socket()
         
         
-        while int.from_bytes(response, "big") != self.octopus.communicate_quit_code**2:
+        while int.from_bytes(response, "big") != self.model.communicate_quit_code**2:
             print("waiting for libet to quit...")
-            self.communicate_state(val=self.octopus.communicate_quit_code)
+            self.communicate_state(val=self.model.communicate_quit_code)
             response = self.read_from_socket()
             time.sleep(0.1)
         print(f'Recieved response: {response}')

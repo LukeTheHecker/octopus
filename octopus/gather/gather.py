@@ -2,7 +2,7 @@ import socket
 # from struct import *
 import numpy as np
 import time
-import util
+from  octopus import util
 
 class Gather:
     def __init__(self, port=51244, sockettimeout=0.1):

@@ -3,8 +3,8 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 # import callbacks
 import pyqtgraph as pg
-import plot
-import workers
+from octopus import plot
+from octopus import workers
 import json
 import numpy as np
 
@@ -317,18 +317,18 @@ class InputDialog(QMainWindow):
         self.parent.run(settings)
 
 class SelectChannels(QMainWindow):
-    def __init__(self, octopus):
+    def __init__(self, model):
         
         # Check if gatherer is connected at all:
-        self.octopus = octopus
-        if not self.octopus.gatherer.connected or not hasattr(octopus.gatherer, 'channelNames'):
+        self.model = model
+        if not self.model.gatherer.connected or not hasattr(model.gatherer, 'channelNames'):
             print(f'Cannot call EOG Correction since Gather class is not connected.')
             return
 
-        super().__init__(octopus)
+        super().__init__(model)
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
-        channelnames = self.octopus.gatherer.channelNames
+        channelnames = self.model.gatherer.channelNames
         
         self.layout = QFormLayout()
         self.text = QLabel()
@@ -350,10 +350,10 @@ class SelectChannels(QMainWindow):
         self.setWindowTitle("Select channels for EOG correction")
 
     def startThread(self):
-        worker = workers.EOGWorker(self.octopus.EOGcorrection, self.cb1.currentText())
-        worker.signals.result.connect(self.octopus.plot_eog_results)  
+        worker = workers.EOGWorker(self.model.EOGcorrection, self.cb1.currentText())
+        worker.signals.result.connect(self.model.plot_eog_results)  
         print("Starting EOG Correction...")
-        self.octopus.threadpool.start(worker)
+        self.model.threadpool.start(worker)
         self.close()
 
     def accept(self):
