@@ -38,7 +38,7 @@ class Model(gui.MainWindow):
         self.threadpool = QThreadPool()
         self.targetMarker = 'response'
         self.communicate_quit_code = 2
-        self.EOGCorrectionDuration = 10
+        self.eog_correction_duration = 10
         self.d_est = np.zeros(100)
         self.toggle_EOG_correction = True
         self.responded = False
@@ -336,9 +336,9 @@ class Model(gui.MainWindow):
         self.close()
         # print(f'Quitted. self.internal_tcp.con.fileno()={self.internal_tcp.con.fileno()}')
 
-    def EOGcorrection(self, name_eog):
+    def eog_correction(self, name_eog):
         # 1) Record Data for 10 seconds
-        data = self.record_data(self.EOGCorrectionDuration)
+        data = self.record_data(self.eog_correction_duration)
         # 2) Select EOG and channel of interest
         idx_eog = self.gatherer.channelNames.index(name_eog)
         print(f"name of selected EOG channel: {name_eog}, idx={idx_eog}")
@@ -365,6 +365,8 @@ class Model(gui.MainWindow):
         self.d_est = d_est
         print('\t\t...done.')
         return (data, idx_eog)
+
+    
 
     def record_data(self, nsec):
         print('\tRecording...')

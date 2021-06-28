@@ -15,6 +15,8 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         self.setFixedSize(1200, 720)
 
+        self.eog_toggle = True
+        self.eog_toggle_text = ['Off', 'On']
         # Callbacks
         # self.callbacks = callbacks.Callbacks(self)
         # Create App Window
@@ -53,7 +55,14 @@ class MainWindow(QMainWindow):
         tools_menu = menubar.addMenu('Tools')
         self.eog_correction_button = QAction('EOG Correction', self)
         tools_menu.addAction(self.eog_correction_button)
+
+        self.reset_d_est_button = QAction('Reset EOG correction', self)
+        tools_menu.addAction(self.reset_d_est_button)
         
+        self.toggle_eog_button = QAction('Toggle EOG correction', self)
+        tools_menu.addAction(self.toggle_eog_button)
+        
+
         # Tabs
         # Initialize tab screen
         self.tabs = QTabWidget()
@@ -144,7 +153,9 @@ class MainWindow(QMainWindow):
         self.settingsButton.triggered.connect(self.open_settings_gui)
         self.connect_rda_button.triggered.connect(self.connect_rda)
         self.connect_libet_button.triggered.connect(self.connect_libet)
-        self.eog_correction_button.triggered.connect(self.eog_correction)
+        self.eog_correction_button.triggered.connect(self.eog_correction_selectChannel)
+        self.reset_d_est_button.triggered.connect(self.reset_d_est)
+        self.toggle_eog_button.triggered.connect(self.toggle_eog_correction)
         # On-GUI Buttons
         self.buttonPresentationcontrol.pressed.connect(self.presentToggle)
         self.buttonforward.pressed.connect(self.stateforward)
@@ -216,7 +227,7 @@ class MainWindow(QMainWindow):
                 if self.internal_tcp.connected:
                     self.threadpool.start(self.worker_communication)
 
-    def eog_correction(self):
+    def eog_correction_selectChannel(self):
         if self.gatherer.connected:
             print('Starting EOG Correction')
             mydialog = SelectChannels(self)
@@ -227,12 +238,14 @@ class MainWindow(QMainWindow):
     def toggle_eog_correction(self):
         ''' Toggle EOG correction on/off'''
         # Toggle EOG correction
-        self.toggle_EOG_correction = not self.toggle_EOG_correction
+        self.eog_toggle = not self.eog_toggle
         # Change Button label accordingly
-        self.buttontoggle_eog_correction.setText(self.toggle_EOG_correction_text[int(self.toggle_EOG_correction)])
+        self.toggle_eog_button.setText(self.eog_toggle_text[int(self.eog_toggle)])
         # Change Button color accordingly
-        self.buttontoggle_eog_correction.setStyleSheet(self.buttonColor[int(self.toggle_EOG_correction)])
+        self.toggle_eog_button.setStyleSheet(self.buttonColor[int(self.eog_toggle)])
 
+    def reset_d_est(self):
+        self.d_est = np.zeros(len(self.d_est))
 
     def change_view_channel(self):
         print(f'Changed viewchannel for data monitor from {self.viewChannel} to {self.channel_dropdown.currentText()}')
@@ -350,7 +363,7 @@ class SelectChannels(QMainWindow):
         self.setWindowTitle("Select channels for EOG correction")
 
     def startThread(self):
-        worker = workers.EOGWorker(self.model.EOGcorrection, self.cb1.currentText())
+        worker = workers.EOGWorker(self.model.eog_correction, self.cb1.currentText())
         worker.signals.result.connect(self.model.plot_eog_results)  
         print("Starting EOG Correction...")
         self.model.threadpool.start(worker)
