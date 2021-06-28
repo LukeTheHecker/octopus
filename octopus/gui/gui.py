@@ -8,6 +8,9 @@ from octopus import workers
 import json
 import numpy as np
 
+STANDARD_FONT = 'Cambria'
+SIZE_POLICY = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        
 class MainWindow(QMainWindow):
     ''' Main Window of the Octopus Neurofeedback App. '''
     def __init__(self):
@@ -16,10 +19,11 @@ class MainWindow(QMainWindow):
         self.setFixedSize(1200, 720)
 
         self.eog_toggle = True
-        self.eog_toggle_text = ['Off', 'On']
-        # Callbacks
-        # self.callbacks = callbacks.Callbacks(self)
+        self.eog_toggle_text = ['EOG: Off', 'EOG: On']
+
         # Create App Window
+        
+        #========================================#
         # Menu
         menubar = self.menuBar()
         # File - Menu
@@ -40,7 +44,6 @@ class MainWindow(QMainWindow):
         self.settingsButton = QAction('Settings', self)
         edit_menu.addAction(self.settingsButton)
         
-
         # Connections - Menu
         connections_menu = menubar.addMenu('Connections')
 
@@ -49,7 +52,6 @@ class MainWindow(QMainWindow):
 
         self.connect_libet_button = QAction('Connect Libet', self)
         connections_menu.addAction(self.connect_libet_button)
-
 
         # Tools - Menu
         tools_menu = menubar.addMenu('Tools')
@@ -61,12 +63,14 @@ class MainWindow(QMainWindow):
         
         self.toggle_eog_button = QAction('Toggle EOG correction', self)
         tools_menu.addAction(self.toggle_eog_button)
-        
+
+        #========================================#        
 
         # Tabs
         # Initialize tab screen
         self.tabs = QTabWidget()
         self.tabMain = QGroupBox(self)
+        self.tabMain.setSizePolicy(SIZE_POLICY)
         self.tabNeuroFeedback = QGroupBox(self)
         self.tabs.addTab(self.tabMain,"Main")
         self.tabs.addTab(self.tabNeuroFeedback,"Neurofeedback")
@@ -79,7 +83,7 @@ class MainWindow(QMainWindow):
         # Data monitor Graph
         self.graphWidget1 = pg.PlotWidget()
         self.graphWidget1.enableAutoRange('y', False)
-        pen = pg.mkPen(color='r', width=1)
+        pen = pg.mkPen(color='r', width=1.)
         self.curve1 = self.graphWidget1.plot(pen=pen)
         # Title
         self.title = QLabel()
@@ -90,7 +94,8 @@ class MainWindow(QMainWindow):
         # Add label
         self.textBox = QLabel()
         self.textBox.setText("State=")
-        self.textBox.setFont(QFont("Times", 14))
+        self.textBox.setFont(QFont(STANDARD_FONT, 14))
+        
         # Add channel dropdown
         self.channel_dropdown = QComboBox()
         # Add buttons
@@ -103,6 +108,9 @@ class MainWindow(QMainWindow):
         # Buttons for state changes:
         self.buttonforward = QPushButton("->")
         self.buttonbackwards = QPushButton("<-")
+        self.amp_info_text = QLabel()
+        self.amp_info_text.setText("SF: 1000Hz, Chans: 32")
+        self.amp_info_text.setFont(QFont(STANDARD_FONT, 14))
 
         
         # Button Group
@@ -111,6 +119,8 @@ class MainWindow(QMainWindow):
         # button_layout.addWidget(self.buttonQuit, 1, 2)
         button_layout.addWidget(self.buttonforward, 1, 1)
         button_layout.addWidget(self.buttonbackwards, 1, 0)
+        button_layout.addWidget(self.amp_info_text, 2, 1)
+
 
         # Lag and channel dropdown thing
         second_head_layout = QGridLayout()
@@ -131,7 +141,7 @@ class MainWindow(QMainWindow):
         self.layout.setColumnStretch(0, 3)
         self.layout.setColumnStretch(1, 0.5)
         self.layout.setRowStretch(0, 0.5)
-
+        
         self.tabMain.setLayout(self.layout)
 
         # Neurofeedback Tab
@@ -242,7 +252,7 @@ class MainWindow(QMainWindow):
         # Change Button label accordingly
         self.toggle_eog_button.setText(self.eog_toggle_text[int(self.eog_toggle)])
         # Change Button color accordingly
-        self.toggle_eog_button.setStyleSheet(self.buttonColor[int(self.eog_toggle)])
+        # self.toggle_eog_button.setStyleSheet(self.buttonColor[int(self.eog_toggle)])
 
     def reset_d_est(self):
         self.d_est = np.zeros(len(self.d_est))

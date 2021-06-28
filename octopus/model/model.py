@@ -358,7 +358,8 @@ class Model(gui.MainWindow):
         d_est = []
         for idx in range(data.shape[0]):
             scaler = amplitudeRatios[idx]
-            tmp_d_est = util.gradient_descent(util.calc_error, EOG*scaler, data[idx, :], max_iter=100000)
+            # tmp_d_est = util.gradient_descent(util.calc_error, EOG*scaler, data[idx, :], max_iter=100000)
+            tmp_d_est = util.estimate_d(EOG*scaler, data[idx, :], maxiter=100000)
             tmp_d_est *= scaler
             d_est.append(tmp_d_est)
         

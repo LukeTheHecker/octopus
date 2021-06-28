@@ -4,6 +4,8 @@ import ctypes
 from pyqtgraph.functions import interpolateArray
 
 from scipy.stats import pearsonr
+from scipy.optimize import minimize_scalar
+
 from scipy.signal import periodogram
 from scipy import argmax, trapz
 
@@ -70,6 +72,7 @@ def gradient_descent(fun, EOG, Cz, stepsize=0.1, max_iter=10000, maxStepDec=100)
     cont = True
     cnt = 0
     numberOfDecreasedStepsizes = 0
+
     while cont:
         current_error = fun(EOG, Cz, d)
         #print(f"current_error {current_error}")
@@ -94,6 +97,13 @@ def gradient_descent(fun, EOG, Cz, stepsize=0.1, max_iter=10000, maxStepDec=100)
         # print(f"cnt {cnt}: d changed to {d}") 
     print(f"Required {cnt} iterations.")
     return d
+
+def estimate_d(VEOG, channel, maxiter=1000000):
+    def fun(x, VEOG, channel):
+        channel_corr = channel - VEOG*x
+        return abs(pearsonr(channel_corr, VEOG)[0])
+    opt = minimize_scalar(fun, args=(VEOG, channel), options=dict(maxiter=maxiter))
+    return opt.x
 
 def bandpower(x, fs, fmin, fmax):
     if any(np.isnan(x)):
