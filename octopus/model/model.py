@@ -31,9 +31,10 @@ class Model(gui.MainWindow):
         super(Model, self).__init__()
         # Initialize callbacks
         # self.callbacks = callbacks.Callbacks(self)
+        
         # Open Settings GUI
         self.open_settings_gui()
-        
+
         # Misc attributes
         self.threadpool = QThreadPool()
         self.targetMarker = 'response'
@@ -69,10 +70,8 @@ class Model(gui.MainWindow):
             # No blinding
             self.blinder = 1
 
-    def run(self, settings):
+    def run(self):
         ''' When settings are entered, save them in the octopus.'''
-        # Save the settings
-        self.saveSettings(settings)
         # Set Blinding
         self.setBlinding()
         
@@ -86,8 +85,8 @@ class Model(gui.MainWindow):
         self.read_blinded_conditions()
 
         # Objects 
-        self.gatherer = gather.DummyGather() 
-        # self.gatherer = gather.Gather()
+        # self.gatherer = gather.DummyGather() 
+        self.gatherer = gather.Gather()
         self.connect_rda()
         self.internal_tcp = communication.StimulusCommunication(self)
         

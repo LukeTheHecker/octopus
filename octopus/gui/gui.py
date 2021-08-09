@@ -7,6 +7,7 @@ from octopus import plot
 from octopus import workers
 import json
 import numpy as np
+import time
 
 STANDARD_FONT = 'Cambria'
 SIZE_POLICY = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -109,7 +110,7 @@ class MainWindow(QMainWindow):
         self.buttonforward = QPushButton("->")
         self.buttonbackwards = QPushButton("<-")
         self.amp_info_text = QLabel()
-        self.amp_info_text.setText("SF: 1000Hz, Chans: 32")
+        self.amp_info_text.setText("SF: , Chans: ")
         self.amp_info_text.setFont(QFont(STANDARD_FONT, 14))
 
         
@@ -173,8 +174,9 @@ class MainWindow(QMainWindow):
 
      
     def open_settings_gui(self):
-        mydialog = InputDialog(self)
-        mydialog.show()
+        dialog = InputDialog(self)
+        dialog.show()
+
 
     def presentToggle(self):
         self.allow_presentation = not self.allow_presentation
@@ -230,12 +232,20 @@ class MainWindow(QMainWindow):
         return result
     
     def connect_libet(self):
+        n_total_fails_allowed = 5
         if hasattr(self, 'internal_tcp'):
             if not self.internal_tcp.connected:
                 print(f'Attempting connection to {self.internal_tcp.IP} {self.internal_tcp.port}...')
                 self.internal_tcp.accept_connection()
                 if self.internal_tcp.connected:
-                    self.threadpool.start(self.worker_communication)
+                    n_fails = 0
+                    while n_fails < n_total_fails_allowed:
+                        try:
+                            self.threadpool.start(self.worker_communication)
+                            break
+                        except:
+                            time.sleep(1)
+
 
     def eog_correction_selectChannel(self):
         if self.gatherer.connected:
@@ -268,10 +278,10 @@ class InputDialog(QMainWindow):
         self.parent = parent
         self.mainWidget = QWidget()
         self.setCentralWidget(self.mainWidget)
-
         self.layout = QFormLayout()
         button_box  = QDialogButtonBox(QDialogButtonBox.Ok)
 
+        self.settings = None
         self.SubjectID = QLineEdit("", self)
         self.channelOfInterestName = QLineEdit("Cz", self)
         self.refChannels = QLineEdit("TP9, TP10", self)
@@ -324,10 +334,16 @@ class InputDialog(QMainWindow):
         return settings
 
     def accept(self):
+        ''' Callback for the "Accept" button of the Input Dialog.
+        '''
         self.close()
         self.checkEntries()
+        
+        
 
     def reject(self):
+        ''' Callback for the "Reject" button of the Input Dialog.
+        '''
         self.close()
 
     def checkEntries(self):
@@ -337,7 +353,8 @@ class InputDialog(QMainWindow):
                 self.parent.open_settings_gui()
                 return
         # All entries are there!
-        self.parent.run(settings)
+        self.parent.saveSettings(settings)
+        self.parent.run()
 
 class SelectChannels(QMainWindow):
     def __init__(self, model):

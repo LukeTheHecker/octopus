@@ -1,5 +1,5 @@
 import socket
-# from struct import *
+from struct import unpack
 import numpy as np
 import time
 from  octopus import util
@@ -47,14 +47,9 @@ class Gather:
         ''' If connection failed it will prompt a dialog 
             to attempt it again.'''
 
-        # if hasattr(self, 'con'):
-        #     if self.connected:
-        #         if self.sr is not None:
-        #             print('Gatherer is already connected')
-        #             return
 
         print(f'Attempting connection to RDA {self.ip} {self.port}...')
-        self.con = socket.socket(AF_INET, SOCK_STREAM)
+        self.con = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.con.settimeout(self.sockettimeout)
 
         try:
@@ -156,6 +151,7 @@ class Gather:
                 self.quit()
         except OSError as err:
             print("Connection probably closed")
+            self.connected = False
    
     def gather_data(self):
         if not self.connected:

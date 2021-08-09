@@ -5,7 +5,7 @@ import select
 import time
 
 class TCP:
-    def __init__(self, IP='10.16.5.93', port=5005, BufferSize=1024, \
+    def __init__(self, port=5005, BufferSize=1024, \
         encoding='utf-8', timeout=5):
         ''' This method creates an internal socket connection which enables 
         communication between this neurofeedback program and the libet stimulus
@@ -94,6 +94,7 @@ class StimulusCommunication(TCP):
                     return False
             except OSError as err:
                 print("Connection probably closed")
+                self.connected = False
         else:
             return
     
@@ -111,12 +112,17 @@ class StimulusCommunication(TCP):
         if val is None:
             try:
                 # Send Current state (allow or forbid) to the libet presentation
-                allow_presentation = self.model.callbacks.allow_presentation
+                allow_presentation = self.model.allow_presentation
                 msg = int(allow_presentation).to_bytes(1, byteorder='big')
                 self.con.send(msg)
                 # print(f'sent {int(allow_presentation)} to libet PC')
             except OSError as err:
                 print("Connection probably closed")
+                self.connected = False
+            except Exception as e:
+                print(type(e))
+                print(e.args)
+                print(e)
         else:
             msg = int(val).to_bytes(1, byteorder='big')
             self.con.send(msg)
