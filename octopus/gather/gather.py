@@ -41,7 +41,7 @@ class Gather:
         self.port = port
         self.sockettimeout = sockettimeout
         self.retryText = ('Try again?', 'Connection to Remote Data Access could not be established.')
-        
+        self.connect()
     
     def connect(self):
         ''' If connection failed it will prompt a dialog 
@@ -356,6 +356,7 @@ class DummyGather:
 
         self.data = np.array([np.nan] * int(self.blockSize))
         self.d = 0.5
+        self.connect()
         
     
     def connect(self):

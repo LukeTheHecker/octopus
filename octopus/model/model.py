@@ -19,7 +19,7 @@ import json
 import random
 from copy import deepcopy
 from scipy.signal import detrend
-from nolds import dfa
+# from nolds import dfa
 
 class Model(gui.MainWindow):
     """ The Model class constitutes the Model of the "Model ViewController"
@@ -60,6 +60,7 @@ class Model(gui.MainWindow):
         self.samplingCrit = int(settings['samplingCrit'])
         self.secondInterviewDelay = int(settings['secondInterviewDelay'])
         self.blindedAxis = bool(settings['blindedAxis'])
+        self.simulated_data = bool(settings['simulated_data'])
         
     def setBlinding(self):
         # blinding
@@ -70,24 +71,32 @@ class Model(gui.MainWindow):
             # No blinding
             self.blinder = 1
 
+    def set_info(self):
+        self.gatherer.refChannels = self.refChannels
+        self.EOGChannelIndex = self.gatherer.channelNames.index(self.EOGChannelName)
+        self.d_est = np.zeros(len(self.gatherer.channelNames))
+        self.handleChannelIndex() 
+        self.fillChannelDropdown()
+        self.init_plots()
+
     def run(self):
         ''' When settings are entered, save them in the octopus.'''
         # Set Blinding
         self.setBlinding()
-        
-        # Add title to datamonitor plot
-        title = f"EEG: {self.channelOfInterestName}"
-        self.graphWidget1.setTitle(title, color="k", size="10pt")
-        
+              
         # Load subject data in case of a crash
         self.load()
         # Read the blinding assignment
         self.read_blinded_conditions()
 
         # Objects 
-        # self.gatherer = gather.DummyGather() 
-        self.gatherer = gather.Gather()
-        self.connect_rda()
+        if self.simulated_data:
+            self.gatherer = gather.DummyGather() 
+        else:
+            self.gatherer = gather.Gather()
+        
+        self.set_info()
+
         self.internal_tcp = communication.StimulusCommunication(self)
         
         # Data Monitors

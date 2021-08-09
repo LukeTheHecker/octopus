@@ -162,7 +162,7 @@ class MainWindow(QMainWindow):
         self.load_state_button.triggered.connect(self.load)
         self.save_state_button.triggered.connect(self.save)
         self.settingsButton.triggered.connect(self.open_settings_gui)
-        self.connect_rda_button.triggered.connect(self.connect_rda)
+        self.connect_rda_button.triggered.connect(self.set_info)
         self.connect_libet_button.triggered.connect(self.connect_libet)
         self.eog_correction_button.triggered.connect(self.eog_correction_selectChannel)
         self.reset_d_est_button.triggered.connect(self.reset_d_est)
@@ -214,22 +214,8 @@ class MainWindow(QMainWindow):
         self.buttonPresentationcontrol.setStyleSheet(self.buttonColor[i])
         self.buttonPresentationcontrol.setText(self.permission_statement[i])
 
-    def connect_rda(self):
-        if hasattr(self, 'gatherer'):
-            result = self.gatherer.connect()
-        else:
-            return False
+    
 
-        if result:
-            self.gatherer.refChannels = self.refChannels
-            self.EOGChannelIndex = self.gatherer.channelNames.index(self.EOGChannelName)
-            self.d_est = np.zeros(len(self.gatherer.channelNames))
-            self.handleChannelIndex() 
-            self.fillChannelDropdown()
-            self.init_plots()
-            
-            
-        return result
     
     def connect_libet(self):
         n_total_fails_allowed = 5
@@ -293,6 +279,8 @@ class InputDialog(QMainWindow):
         self.blindedAxis = QCheckBox(self)
         self.blindedAxis.setChecked(True)
 
+        self.simulated_data = QCheckBox(self)
+        self.simulated_data.setChecked(False)
 
         self.layout.addRow("User ID", self.SubjectID)
         self.layout.addRow("SCP Channel", self.channelOfInterestName)
@@ -305,6 +293,8 @@ class InputDialog(QMainWindow):
         self.layout.addRow("SCP sampling criterion", self.samplingCrit)
         self.layout.addRow("Delay to 2nd Interview", self.secondInterviewDelay)
         self.layout.addRow("Blinding", self.blindedAxis)
+        self.layout.addRow("Simulated Data", self.simulated_data)
+        
         
         # self.layout.addRow('',QSpacerItem())
         self.layout.addWidget(button_box)
@@ -330,7 +320,9 @@ class InputDialog(QMainWindow):
                     'SCPBaselineDuration': self.SCPBaselineDuration.text(),
                     'samplingCrit': self.samplingCrit.text(),
                     'secondInterviewDelay': self.secondInterviewDelay.text(),
-                    'blindedAxis': self.blindedAxis.isChecked()}
+                    'blindedAxis': self.blindedAxis.isChecked(),
+                    'simulated_data': self.simulated_data.isChecked()
+                    }
         return settings
 
     def accept(self):

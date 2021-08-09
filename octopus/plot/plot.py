@@ -218,7 +218,7 @@ class HistMonitor:
         EOG = gatherer.dataMemory[self.EOGChannelIndex, -back_idx:]
         tmpSCP = tmpSCP - (EOG * d_est[self.channelOfInterestIdx])
         # Filter the data
-        tmpSCP = filter_data(tmpSCP, self.sr, self.filtfreq[0], self.filtfreq[1])
+        tmpSCP = filter_data(tmpSCP, self.sr, self.filtfreq[0], self.filtfreq[1], method='iir')
         # Correct Baseline:
         tmpSCP -= np.mean(tmpSCP[0:int(self.scpBaselineDuration*self.sr)])
 
