@@ -19,6 +19,8 @@ import json
 import random
 from copy import deepcopy
 from scipy.signal import detrend
+import warnings
+warnings.filterwarnings("ignore")
 # from nolds import dfa
 
 class Model(gui.MainWindow):
@@ -39,8 +41,11 @@ class Model(gui.MainWindow):
         self.threadpool = QThreadPool()
         self.targetMarker = 'response'
         self.communicate_quit_code = 2
+        self.trials_until_first_interview = 0
         self.eog_correction_duration = 10
         self.d_est = np.zeros(100)
+        self.avg_scp = None
+        self.sd_scp = None
         self.toggle_EOG_correction = True
         self.responded = False
         self.current_state = 0
@@ -73,6 +78,11 @@ class Model(gui.MainWindow):
 
     def set_info(self):
         self.gatherer.refChannels = self.refChannels
+        self.sampling_frequency = self.gatherer.sr
+        self.number_of_channels = self.gatherer.channelCount
+        self.amp_info_text.setText(
+            f"{int(self.sampling_frequency)} Hz\n{self.number_of_channels} channels"
+        )
         self.EOGChannelIndex = self.gatherer.channelNames.index(self.EOGChannelName)
         self.d_est = np.zeros(len(self.gatherer.channelNames))
         self.handleChannelIndex() 
@@ -124,7 +134,7 @@ class Model(gui.MainWindow):
         
         # Worker: Signalling (Sends signals to the stimulus presentation program)
         self.worker_communication = workers.SignallingWorker(self.internal_tcp.communication_routines)
-        self.worker_communication.signals.result.connect(self.response_triggered)  
+        self.worker_communication.signals.result.connect(self.response_triggered)
         self.threadpool.start(self.worker_communication)
         
     def init_plots(self):
@@ -179,7 +189,11 @@ class Model(gui.MainWindow):
         ''' This function is called whenever the participant presses the button.'''
         if result:
             self.hist_monitor.button_press(self.gatherer, self.d_est)
-            self.hist_monitor.plot_hist()
+            self.hist_monitor.plot_hist(avg=self.avg_scp, sd=self.sd_scp)
+            self.check_if_interview()
+            if self.go_interview and (self.current_state == 1 or self.current_state == 3):
+                self.current_state += 1
+                self.presentToggle()
 
     def checkState(self, recent_response=False):
         ''' This method specifies the logic of the experiment.
@@ -188,11 +202,11 @@ class Model(gui.MainWindow):
             
         '''
         # print('Checking state')
-        if recent_response and (self.current_state == 1 or self.current_state == 3):
-            self.check_if_interview()
-            if self.go_interview:
-                self.current_state += 1
-                self.presentToggle()
+        # if recent_response and (self.current_state == 1 or self.current_state == 3):
+            # self.check_if_interview()
+            # if self.go_interview:
+            #     self.current_state += 1
+            #     self.presentToggle()
                 
         if self.current_state == 0 and len(self.hist_monitor.scpAveragesList) >= self.samplingCrit:
             self.current_state = 1
@@ -204,7 +218,7 @@ class Model(gui.MainWindow):
             print("Interview is over, lets continue!")
             self.current_state += 1
 
-        if self.current_state == 5 or self.quit == True:
+        if self.quit:
             self.closeAll()
 
         self.textBox.setText(f"State={self.current_state}\n{self.stateDescription[self.current_state]}")
@@ -219,8 +233,9 @@ class Model(gui.MainWindow):
             return
 
         last_scp = self.hist_monitor.scpAveragesList[-1]
-        avg_scp = np.median(self.hist_monitor.scpAveragesList)
-        sd_scp = np.std(self.hist_monitor.scpAveragesList)
+        if self.avg_scp is None and self.sd_scp is None:
+            self.avg_scp = np.median(self.hist_monitor.scpAveragesList)
+            self.sd_scp = np.std(self.hist_monitor.scpAveragesList)
 
         self.go_interview = False
 
@@ -231,9 +246,11 @@ class Model(gui.MainWindow):
             condition = self.conds[key]
 
             if condition == 'Positive':
-                self.go_interview = (last_scp > avg_scp + sd_scp) and (last_scp > 0)
+                self.go_interview = (last_scp > self.avg_scp + self.sd_scp) and (last_scp > 0)
+                print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp + self.sd_scp)} or higher.')
             elif condition == 'Negative':
-                self.go_interview = (last_scp < avg_scp - sd_scp) and (last_scp < 0)
+                self.go_interview = (last_scp < self.avg_scp - self.sd_scp) and (last_scp < 0)
+                print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp - self.sd_scp)} or lower.')
 
             # Save how many trials it took until the first interview was started
             self.trials_until_first_interview = n_scps
@@ -248,9 +265,11 @@ class Model(gui.MainWindow):
                 self.go_interview = False
             else:
                 if condition == 'Positive':
-                    self.go_interview = (last_scp > avg_scp + sd_scp) and (last_scp > 0)
+                    self.go_interview = (last_scp > self.avg_scp + self.sd_scp) and (last_scp > 0)
+                    print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp + self.sd_scp)} or higher.')
                 elif condition == 'Negative':
-                    self.go_interview = (last_scp < avg_scp - sd_scp) and (last_scp < 0)
+                    self.go_interview = (last_scp < self.avg_scp - self.sd_scp) and (last_scp < 0)
+                    print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp - self.sd_scp)} or lower.')
 
         if not self.go_interview and n_scps < self.samplingCrit:
             print("Too few trials to start interview.")
@@ -265,7 +284,7 @@ class Model(gui.MainWindow):
             "Interview for first condition.",
             "Waiting for appropriate SCP of second condition.",
             "Interview for second condition.",
-            "Quit Experiment."
+            "Experiment done."
             ]
 
     def read_blinded_conditions(self):

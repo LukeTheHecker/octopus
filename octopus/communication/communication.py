@@ -6,7 +6,7 @@ import time
 
 class TCP:
     def __init__(self, port=5005, BufferSize=1024, \
-        encoding='utf-8', timeout=5):
+        encoding='utf-8', timeout=10):
         ''' This method creates an internal socket connection which enables 
         communication between this neurofeedback program and the libet stimulus
         presentation program. 
@@ -49,7 +49,7 @@ class TCP:
             return True
         except socket.timeout:
             self.connected = False
-            print('\t...failed.')
+            print('\t...failed due to timeout.')
             return False
         except:
             self.connected = False

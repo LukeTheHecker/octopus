@@ -213,44 +213,59 @@ class HistMonitor:
         '''
         # Get data from gatherer:
         back_idx = int(self.SCPTrialDuration * self.sr)
-        tmpSCP = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
+        tmp_scp_raw = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
         # Correct eye artifacts
         EOG = gatherer.dataMemory[self.EOGChannelIndex, -back_idx:]
-        tmpSCP = tmpSCP - (EOG * d_est[self.channelOfInterestIdx])
+        tmp_scp_raw = tmp_scp_raw - (EOG * d_est[self.channelOfInterestIdx])
         # Filter the data
-        tmpSCP = filter_data(tmpSCP, self.sr, self.filtfreq[0], self.filtfreq[1], method='iir')
+        tmp_scp_filt = filter_data(tmp_scp_raw, self.sr, self.filtfreq[0], self.filtfreq[1], method='iir', verbose=0)
+        
         # Correct Baseline:
-        tmpSCP -= np.mean(tmpSCP[0:int(self.scpBaselineDuration*self.sr)])
+        tmp_scp_filt -= np.mean(tmp_scp_filt[0:int(self.scpBaselineDuration*self.sr)])
+        tmp_scp_raw -= np.mean(tmp_scp_raw[0:int(self.scpBaselineDuration*self.sr)])
+
 
         plt.figure()
         time = np.arange(-self.SCPTrialDuration, 0, 1/self.sr)
-        plt.plot(time, tmpSCP*self.blinder)
+        plt.plot(time, tmp_scp_raw*self.blinder, label='raw')
+        plt.plot(time, tmp_scp_filt*self.blinder, label='filtered')
         plt.title("Slow cortical potential")
+        plt.legend()
         plt.show()
         # Save average
-        self.scpAveragesList = np.append(self.scpAveragesList, np.mean(tmpSCP))
+        self.scpAveragesList = np.append(self.scpAveragesList, np.mean(tmp_scp_filt))
         
         self.n_responses = len(self.scpAveragesList)
         self.title = f'Histogram of {self.n_responses} responses'
         self.canvas.ax.set_title(self.title, fontsize=14)
 
-    def plot_hist(self):
+    def plot_hist(self, avg=None, sd=None):
         ''' Plot histogram of SCP averages if there are enough of them.'''
         
         # Clear axis
         self.canvas.ax.clear()
         if len(self.scpAveragesList) < self.kdeCrit and len(self.scpAveragesList) > 1:
             sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=False,
-                hist=True)
+                hist=False)
             
         elif len(self.scpAveragesList) >= self.kdeCrit:
-            sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=True,
-                hist=True)
+            distplot = sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=True,
+                hist=False)
             # Get the maximum value of the kde distribution
-            maxval = np.max(sns.distplot(self.scpAveragesList*self.blinder, ax=self.canvas.ax, rug=True, kde=True, 
-                hist=True).get_lines()[0].get_data()[1])
+            try:
+                maxval = np.max(distplot.get_lines()[0].get_data()[1])
+            except:
+                return
 
-            self.canvas.ax.plot([self.scpAveragesList[-1]*self.blinder, self.scpAveragesList[-1]*self.blinder], [0, maxval], 'r')
+            self.canvas.ax.plot([self.scpAveragesList[-1]*self.blinder]*2, [0, maxval], 'r')
+            if avg is not None and sd is not None:
+                
+                lower_bound = avg*self.blinder - sd
+                upper_bound = avg*self.blinder + sd
+                
+                self.canvas.ax.plot([lower_bound, lower_bound], [0, maxval], 'blue')
+                self.canvas.ax.plot([upper_bound, upper_bound], [0, maxval], 'blue')
+
         else:
             return 
         # Update title

@@ -116,11 +116,11 @@ class MainWindow(QMainWindow):
         
         # Button Group
         button_layout = QGridLayout()
-        button_layout.addWidget(self.buttonPresentationcontrol, 0, 0, 1, 3)
+        button_layout.addWidget(self.buttonPresentationcontrol, 0, 0, 1, 2)
         # button_layout.addWidget(self.buttonQuit, 1, 2)
-        button_layout.addWidget(self.buttonforward, 1, 1)
-        button_layout.addWidget(self.buttonbackwards, 1, 0)
-        button_layout.addWidget(self.amp_info_text, 2, 1)
+        button_layout.addWidget(self.buttonforward, 1, 1, 1, 1)
+        button_layout.addWidget(self.buttonbackwards, 1, 0, 1, 1)
+        button_layout.addWidget(self.amp_info_text, 2, 0, 1, 2)
 
 
         # Lag and channel dropdown thing
@@ -171,7 +171,7 @@ class MainWindow(QMainWindow):
         self.buttonPresentationcontrol.pressed.connect(self.presentToggle)
         self.buttonforward.pressed.connect(self.stateforward)
         self.buttonbackwards.pressed.connect(self.statebackwards)
-
+        self.channel_dropdown.activated.connect(self.change_view_channel)
      
     def open_settings_gui(self):
         dialog = InputDialog(self)
@@ -274,7 +274,7 @@ class InputDialog(QMainWindow):
         self.EOGChannelName = QLineEdit("VEOG", self)
         self.SCPTrialDuration = QLineEdit("2.5", self)
         self.SCPBaselineDuration = QLineEdit("0.20", self)
-        self.samplingCrit = QLineEdit("5", self)
+        self.samplingCrit = QLineEdit("15", self)
         self.secondInterviewDelay = QLineEdit("5", self)
         self.blindedAxis = QCheckBox(self)
         self.blindedAxis.setChecked(True)

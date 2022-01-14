@@ -273,14 +273,19 @@ class Gather:
             index = index + markersize[0]
 
         # return (self.block, self.points, self.markerCount, self.data, self.markers)
+        if len(self.markers)>0:
+            print('\nMarkers:', len(self.markers))
+            self.markers[0].pprint()
     
     def preprocess_data(self):
+        non_eeg_channels = ['veog', 'res', 'resp', 'respiration']
+        
         # rereferencing
         if self.refChannels is not None:
             self.refChannelsIndices = [self.channelNames.index(i) for i in self.refChannels]
             # loop through channels
             for i in range(self.data.shape[0]):
-                if self.channelNames[i] == 'VEOG':
+                if any([elem == self.channelNames[i].lower() for elem in non_eeg_channels]):
                     continue
                 self.data[i, :] -= np.mean(self.data[self.refChannelsIndices, :], axis=0)
 
@@ -511,6 +516,15 @@ class Marker:
         self.channel = -1
         self.type = ""
         self.description = ""
+    
+    def pprint(self):
+        print(
+            "Position: ", self.position,
+            "\nPoints: ", self.points,
+            "\nChannel: ", self.channel,
+            "\nType: ", self.type,
+            "\nDescription: ", self.description,
+        )
 
 class DummyCon:
     def __init__(self):
