@@ -34,6 +34,7 @@ class Gather:
         self.lag_s = None
         self.lastBlock = -1
         self.first_block_ever = None
+        self.markerMemory = []
 
         # Data TCP Connection (with PC that sends RDA)
         self.connected = False
@@ -274,15 +275,16 @@ class Gather:
 
         # return (self.block, self.points, self.markerCount, self.data, self.markers)
         if len(self.markers)>0:
-            print('\nMarkers:', len(self.markers))
-            self.markers[0].pprint()
-    
+            if self.markers[0].description == "S 10":
+                self.markerMemory.extend(self.markers)
+            
     def preprocess_data(self):
         non_eeg_channels = ['veog', 'res', 'resp', 'respiration']
         
         # rereferencing
         if self.refChannels is not None:
             self.refChannelsIndices = [self.channelNames.index(i) for i in self.refChannels]
+            print(self.refChannelsIndices)
             # loop through channels
             for i in range(self.data.shape[0]):
                 if any([elem == self.channelNames[i].lower() for elem in non_eeg_channels]):

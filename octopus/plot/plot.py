@@ -4,7 +4,7 @@ import numpy as np
 from numpy.core.shape_base import block
 # from util import *
 import seaborn as sns
-
+import mne 
 import matplotlib
 from matplotlib.figure import Figure
 matplotlib.use('Qt5Agg')
@@ -206,38 +206,94 @@ class HistMonitor:
         self.hist = self.canvas.ax.hist([-1, 0, 1])   
         self.canvas.ax.cla()
         self.canvas.ax.set_ylabel('Amplitude [microvolt]')
-                
-        
+    
+    @staticmethod
+    def guess_channel_type(ch_names):
+        ch_types = []
+        non_eeg_channels = ['veog', 'res', 'resp', 'respiration']
+        for ch_name in ch_names:
+            if ch_name.lower() in non_eeg_channels:
+                ch_types.append('misc')
+            else:
+                ch_types.append('eeg')
+        return ch_types
+
     def button_press(self, gatherer, d_est):
         ''' If a button was pressed append the average baseline corrected SCP to a list.
         '''
         # Get data from gatherer:
         back_idx = int(self.SCPTrialDuration * self.sr)
-        tmp_scp_raw = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
-        # Correct eye artifacts
-        EOG = gatherer.dataMemory[self.EOGChannelIndex, -back_idx:]
-        tmp_scp_raw = tmp_scp_raw - (EOG * d_est[self.channelOfInterestIdx])
-        # Filter the data
-        tmp_scp_filt = filter_data(tmp_scp_raw, self.sr, self.filtfreq[0], self.filtfreq[1], method='iir', verbose=0)
+        data = gatherer.dataMemory[:, -back_idx:]
+        # Create mne.Info Object
+        ch_types = self.guess_channel_type(gatherer.channelNames)
+        info = mne.create_info(gatherer.channelNames, self.sr, ch_types=ch_types)
+        # Create EpochsArray object
+        epochs = mne.EpochsArray(data[np.newaxis, :, :], info, tmin=-self.SCPTrialDuration, verbose=0)
+        print("\nCHANNEL TYPES:", epochs.get_channel_types(),  '\n')
+        # Preprocess
+        baseline = (-self.SCPTrialDuration, -self.SCPTrialDuration+self.scpBaselineDuration)
+        epochs.apply_baseline(baseline=baseline, verbose=0)
         
-        # Correct Baseline:
-        tmp_scp_filt -= np.mean(tmp_scp_filt[0:int(self.scpBaselineDuration*self.sr)])
-        tmp_scp_raw -= np.mean(tmp_scp_raw[0:int(self.scpBaselineDuration*self.sr)])
-
+        if gatherer.refChannels is not None:
+            print("rereference")
+            epochs.set_eeg_reference(gatherer.refChannels)
+        
+        # Filter
+        epochs_filt = epochs.copy().filter(*self.filtfreq, verbose=0)
+        
+        # Extract data
+        coi = np.squeeze(epochs.copy().pick_channels([epochs.ch_names[self.channelOfInterestIdx]]).get_data())
+        coi_filt = np.squeeze(epochs_filt.copy().pick_channels([epochs_filt.ch_names[self.channelOfInterestIdx]]).get_data())
+        
 
         plt.figure()
-        time = np.arange(-self.SCPTrialDuration, 0, 1/self.sr)
-        plt.plot(time, tmp_scp_raw*self.blinder, label='raw')
-        plt.plot(time, tmp_scp_filt*self.blinder, label='filtered')
+        plt.plot(epochs.times, coi, label='raw')
+        plt.plot(epochs_filt.times, coi_filt, label='filtered')
         plt.title("Slow cortical potential")
         plt.legend()
         plt.show()
         # Save average
-        self.scpAveragesList = np.append(self.scpAveragesList, np.mean(tmp_scp_filt))
+        self.scpAveragesList = np.append(self.scpAveragesList, np.mean(coi_filt))
         
         self.n_responses = len(self.scpAveragesList)
         self.title = f'Histogram of {self.n_responses} responses'
-        self.canvas.ax.set_title(self.title, fontsize=14)
+        self.canvas.ax.set_title(self.title, fontsize=14)                
+        
+    # def button_press(self, gatherer, d_est):
+    #     ''' If a button was pressed append the average baseline corrected SCP to a list.
+    #     '''
+    #     # Get data from gatherer:
+    #     back_idx = int(self.SCPTrialDuration * self.sr)
+    #     tmp_scp_raw = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
+    #     tmo_reference_raw = gatherer.dataMemory[self.channelOfInterestIdx, -back_idx:]
+    #     # Correct eye artifacts
+    #     EOG = gatherer.dataMemory[self.EOGChannelIndex, -back_idx:]
+    #     tmp_scp_raw = tmp_scp_raw - (EOG * d_est[self.channelOfInterestIdx])
+    #     # Filter the data
+    #     tmp_scp_filt = filter_data(tmp_scp_raw, self.sr, self.filtfreq[0], self.filtfreq[1], method='iir', verbose=0)
+        
+    #     # Correct Baseline:
+    #     tmp_scp_filt -= np.mean(tmp_scp_filt[0:int(self.scpBaselineDuration*self.sr)])
+    #     tmp_scp_raw -= np.mean(tmp_scp_raw[0:int(self.scpBaselineDuration*self.sr)])
+
+    #     print(f"filtered with {self.filtfreq[0]}-{self.filtfreq[1]} Hz\n \
+    #         Channel idx: {self.channelOfInterestIdx}\n \
+    #         Channel name: {gatherer.channelNames[self.channelOfInterestIdx]}\n \
+    #         Average of filtered: {np.mean(tmp_scp_filt)}\n")
+
+    #     plt.figure()
+    #     time = np.arange(-self.SCPTrialDuration, 0, 1/self.sr)
+    #     plt.plot(time, tmp_scp_raw*self.blinder, label='raw')
+    #     plt.plot(time, tmp_scp_filt*self.blinder, label='filtered')
+    #     plt.title("Slow cortical potential")
+    #     plt.legend()
+    #     plt.show()
+    #     # Save average
+    #     self.scpAveragesList = np.append(self.scpAveragesList, np.mean(tmp_scp_filt))
+        
+    #     self.n_responses = len(self.scpAveragesList)
+    #     self.title = f'Histogram of {self.n_responses} responses'
+    #     self.canvas.ax.set_title(self.title, fontsize=14)
 
     def plot_hist(self, avg=None, sd=None):
         ''' Plot histogram of SCP averages if there are enough of them.'''

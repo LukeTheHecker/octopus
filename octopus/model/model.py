@@ -126,6 +126,12 @@ class Model(gui.MainWindow):
         self.plotTimer.timeout.connect(self.data_monitor_update)
         self.plotTimer.start()
 
+        # Set timer for button press
+        self.plotTimer = QTimer()
+        self.plotTimer.setInterval(20)  # every 20 ms it is called
+        self.plotTimer.timeout.connect(self.data_monitor_update)
+        self.plotTimer.start()
+
         # Threading: Worker call functions  asynchronously
 
         # Worker: Data Gatherer (which reads data from brain vision RDA via TCP)
@@ -136,7 +142,8 @@ class Model(gui.MainWindow):
         self.worker_communication = workers.SignallingWorker(self.internal_tcp.communication_routines)
         self.worker_communication.signals.result.connect(self.response_triggered)
         self.threadpool.start(self.worker_communication)
-        
+
+
     def init_plots(self):
         ''' Start Data and Histogram Monitor: '''
         if not hasattr(self, 'gatherer'):
