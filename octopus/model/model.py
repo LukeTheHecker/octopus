@@ -241,8 +241,11 @@ class Model(gui.MainWindow):
 
         last_scp = self.hist_monitor.scpAveragesList[-1]
         if self.avg_scp is None and self.sd_scp is None:
-            self.avg_scp = np.median(self.hist_monitor.scpAveragesList)
-            self.sd_scp = np.std(self.hist_monitor.scpAveragesList)
+            median = np.median(self.hist_monitor.scpAveragesList)
+            mad = np.median(abs(self.hist_monitor.scpAveragesList-median)) * 1.4826  # Median Absolute Deviation 
+            self.avg_scp = median
+            # self.sd_scp = np.std(self.hist_monitor.scpAveragesList)
+            self.sd_scp = mad
 
         self.go_interview = False
 
@@ -253,10 +256,15 @@ class Model(gui.MainWindow):
             condition = self.conds[key]
 
             if condition == 'Positive':
-                self.go_interview = (last_scp > self.avg_scp + self.sd_scp) and (last_scp > 0)
+                self.go_interview = (last_scp > self.avg_scp + self.sd_scp) and (last_scp > 0) and (last_scp < self.avg_scp + self.sd_scp*2.5)
+                if (last_scp > self.avg_scp + self.sd_scp*2.5):
+                    print(f"outlier ({last_scp}>{self.avg_scp + self.sd_scp*2.5})")
                 print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp + self.sd_scp)} or higher.')
             elif condition == 'Negative':
-                self.go_interview = (last_scp < self.avg_scp - self.sd_scp) and (last_scp < 0)
+                self.go_interview = (last_scp < self.avg_scp - self.sd_scp) and (last_scp < 0) and (last_scp > self.avg_scp - self.sd_scp*2.5)
+                if (last_scp > self.avg_scp - self.sd_scp*2.5):
+                    print(f"outlier ({last_scp}<{self.avg_scp - self.sd_scp*2.5})")
+                
                 print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp - self.sd_scp)} or lower.')
 
             # Save how many trials it took until the first interview was started
@@ -272,10 +280,10 @@ class Model(gui.MainWindow):
                 self.go_interview = False
             else:
                 if condition == 'Positive':
-                    self.go_interview = (last_scp > self.avg_scp + self.sd_scp) and (last_scp > 0)
+                    self.go_interview = (last_scp > self.avg_scp + self.sd_scp) and (last_scp > 0) and (last_scp < self.avg_scp + self.sd_scp*2.5)
                     print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp + self.sd_scp)} or higher.')
                 elif condition == 'Negative':
-                    self.go_interview = (last_scp < self.avg_scp - self.sd_scp) and (last_scp < 0)
+                    self.go_interview = (last_scp < self.avg_scp - self.sd_scp) and (last_scp < 0) and (last_scp > self.avg_scp - self.sd_scp*2.5)
                     print(f'scp was {int(last_scp)} and needs to be {int(self.avg_scp - self.sd_scp)} or lower.')
 
         if not self.go_interview and n_scps < self.samplingCrit:

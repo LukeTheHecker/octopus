@@ -224,12 +224,17 @@ class HistMonitor:
         # Get data from gatherer:
         back_idx = int(self.SCPTrialDuration * self.sr)
         data = gatherer.dataMemory[:, -back_idx:]
+        
+        # DELETE THIS LINE:
+        # data += np.cumsum(np.random.randn(*data.shape), axis=-1)
+
         # Create mne.Info Object
         ch_types = self.guess_channel_type(gatherer.channelNames)
         info = mne.create_info(gatherer.channelNames, self.sr, ch_types=ch_types)
         # Create EpochsArray object
         epochs = mne.EpochsArray(data[np.newaxis, :, :], info, tmin=-self.SCPTrialDuration, verbose=0)
         print("\nCHANNEL TYPES:", epochs.get_channel_types(),  '\n')
+        print("Epochs time goes from ", epochs.times[0], " to ", epochs.times[-1])
         # Preprocess
         baseline = (-self.SCPTrialDuration, -self.SCPTrialDuration+self.scpBaselineDuration)
         epochs.apply_baseline(baseline=baseline, verbose=0)
@@ -240,24 +245,27 @@ class HistMonitor:
         
         # Filter
         epochs_filt = epochs.copy().filter(*self.filtfreq, verbose=0)
-        
+        print("filter at ", self.filtfreq[0], " until ", self.filtfreq)
+        print("channel of interest: ", epochs.ch_names[self.channelOfInterestIdx], " at idx ", self.channelOfInterestIdx)
         # Extract data
         coi = np.squeeze(epochs.copy().pick_channels([epochs.ch_names[self.channelOfInterestIdx]]).get_data())
         coi_filt = np.squeeze(epochs_filt.copy().pick_channels([epochs_filt.ch_names[self.channelOfInterestIdx]]).get_data())
         
 
         plt.figure()
-        plt.plot(epochs.times, coi, label='raw')
-        plt.plot(epochs_filt.times, coi_filt, label='filtered')
+        plt.plot(epochs.times, coi*self.blinder, label='raw')
+        plt.plot(epochs_filt.times, coi_filt*self.blinder, label='filtered')
         plt.title("Slow cortical potential")
         plt.legend()
         plt.show()
+        
         # Save average
         self.scpAveragesList = np.append(self.scpAveragesList, np.mean(coi_filt))
         
         self.n_responses = len(self.scpAveragesList)
         self.title = f'Histogram of {self.n_responses} responses'
-        self.canvas.ax.set_title(self.title, fontsize=14)                
+        self.canvas.ax.set_title(self.title, fontsize=14)          
+        return True      
         
     # def button_press(self, gatherer, d_est):
     #     ''' If a button was pressed append the average baseline corrected SCP to a list.

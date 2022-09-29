@@ -282,14 +282,15 @@ class Gather:
         non_eeg_channels = ['veog', 'res', 'resp', 'respiration']
         
         # rereferencing
-        if self.refChannels is not None:
-            self.refChannelsIndices = [self.channelNames.index(i) for i in self.refChannels]
-            print(self.refChannelsIndices)
-            # loop through channels
-            for i in range(self.data.shape[0]):
-                if any([elem == self.channelNames[i].lower() for elem in non_eeg_channels]):
-                    continue
-                self.data[i, :] -= np.mean(self.data[self.refChannelsIndices, :], axis=0)
+        # if self.refChannels is not None:
+        #     self.refChannelsIndices = [self.channelNames.index(i) for i in self.refChannels]
+        #     # loop through channels
+        #     for i in range(self.data.shape[0]):
+        #         if any([elem == self.channelNames[i].lower() for elem in non_eeg_channels]):
+        #             continue
+        #         self.data[i, :] -= np.mean(self.data[self.refChannelsIndices, :], axis=0)
+        #         print("Subtracting shape: ", np.mean(self.data[self.refChannelsIndices, :], axis=0).shape, " from ", self.data[i,:].shape)
+
 
     def update_data(self):
         ''' Collect new data and add it to the data memory.
